@@ -1,13 +1,17 @@
 import { useCallback, useState } from 'react';
 import type { GameState, Move, AIResponse, Difficulty } from '../types/interfaces';
+import { API_URL } from '../constants';
 
 class GomokuGame {
   private boardSize: number;
+  private firstMovePlayer: number;
+
   private gameState: GameState;
   private apiUrl: string; // TODO this might be able to use a constant value
   
-  constructor(boardSize: number = 15, apiUrl: string = '/api') {
+  constructor(boardSize: number = 15, firstMovePlayer = "1", apiUrl: string = API_URL) {
     this.boardSize = boardSize;
+    this.firstMovePlayer = +firstMovePlayer; // TODO make sure to check this for potential failure
     this.apiUrl = apiUrl;
     this.gameState = this.initializeGame();
   }
@@ -19,8 +23,8 @@ class GomokuGame {
     
     return {
       board,
-      currentPlayer: 1, // Human starts
-      gameStatus: 'playing'
+      currentPlayer: this.firstMovePlayer,
+      gameStatus: 'playing' // TODO update this
     };
   }
 
@@ -187,15 +191,16 @@ class GomokuGame {
     this.gameState = this.initializeGame();
   }
 
+  // TODO might not need this
   // Get cell display value
-  getCellValue(row: number, col: number): string {
-    const value = this.gameState.board[row][col];
-    switch (value) {
-      case 1: return '●'; // Human (black)
-      case 2: return '○'; // AI (white)
-      default: return '';
-    }
-  }
+  // getCellValue(row: number, col: number): string {
+  //   const value = this.gameState.board[row][col];
+  //   switch (value) {
+  //     case 1: return '●'; // Human (black)
+  //     case 2: return '○'; // AI (white)
+  //     default: return '';
+  //   }
+  // }
 
   // Check if it's human's turn
   isHumanTurn(): boolean {
@@ -206,20 +211,20 @@ class GomokuGame {
   getStatusMessage(): string {
     switch (this.gameState.gameStatus) {
       case 'human_wins': return 'You win! 🎉';
-      case 'ai_wins': return 'AI wins! 🤖';
+      case 'ai_wins': return 'AI wins! 🤖'; // TODO update this when implementing human player 2
       case 'draw': return "It's a draw! 🤝";
       case 'playing':
         return this.gameState.currentPlayer === 1 
-          ? 'Your turn' 
-          : 'AI is thinking...';
+          ? 'Player 1 turn' 
+          : 'AI is thinking...'; // TODO update this when implementing human player 2
       default: return '';
     }
   }
 }
 
 // Custom Hook for Gomoku Game
-const useGomokuGame = (boardSize: number = 15, apiUrl: string = 'http://localhost:8000') => { // TODO update default api
-  const [game] = useState(() => new GomokuGame(boardSize, apiUrl));
+const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1", apiUrl: string = 'http://localhost:8000') => { // TODO update default api
+  const [game] = useState(() => new GomokuGame(boardSize, firstMovePlayer, apiUrl));
   const [gameState, setGameState] = useState(game.getGameState());
   const [isLoading, setIsLoading] = useState(false);
 
@@ -240,12 +245,13 @@ const useGomokuGame = (boardSize: number = 15, apiUrl: string = 'http://localhos
     setIsLoading(false);
   }, [game]);
 
+  // TODO add a useCalllbacl here for starting game
+
   return {
     gameState,
     makeMove,
     resetGame,
     isLoading,
-    getCellValue: (row: number, col: number) => game.getCellValue(row, col),
     getStatusMessage: () => game.getStatusMessage(),
     boardSize: game.getBoardSize()
   };

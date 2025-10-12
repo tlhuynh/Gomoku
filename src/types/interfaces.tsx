@@ -8,7 +8,7 @@ export interface Move {
 export interface GameState {
   board: number[][];
   currentPlayer: number;
-  gameStatus: 'playing' | 'human_wins' | 'ai_wins' | 'draw';
+  gameStatus: 'not_started' | 'playing' | 'human_wins' | 'ai_wins' | 'draw';
   lastMove?: Move;
 }
 
@@ -26,13 +26,6 @@ export interface GomokuCellState {
   onClick: (row: number, col: number) => void; // ref: https://stackoverflow.com/questions/57510552/react-prop-types-with-typescript-how-to-have-a-function-type?newreg=be1d7e293449446db636a5066a653138
   disabled: boolean;
   isLastMove: boolean;
-}
-
-// Contains information about the stone
-export type Stone = {
-  row: number;
-  col: number;
-  color: "black" | "white";
 }
 
 // Contains information about the current game difficulty
