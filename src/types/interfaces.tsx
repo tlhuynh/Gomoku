@@ -28,12 +28,5 @@ export interface GomokuCellState {
   isLastMove: boolean;
 }
 
-// Contains information about the stone
-export type Stone = {
-  row: number;
-  col: number;
-  color: "black" | "white";
-}
-
 // Contains information about the current game difficulty
 export type Difficulty = 'easy' | 'medium' | 'hard';

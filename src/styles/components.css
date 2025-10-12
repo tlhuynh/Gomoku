@@ -9,75 +9,134 @@
     min-height: 100vh
 }
 
-/* Styles for board */
-.gomoku-board {
-    display: grid;
-    grid-template-columns: repeat(15, 40px);
-    grid-template-rows: repeat(15, 40px);
-    background-color: #dba65b;
-    position: relative;
+.main-title {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 2.5rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-.gomoku-board-intersection {
-    position: relative;
+.center-container {
+    background-color: white;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
 }
 
-.intersection::before,
-.intersection::after {
-  content: "";
-  position: absolute;
-  background-color: #333;
-}
-
-/* vertical line */
-.intersection::before {
-  width: 1px;
-  height: 100%;
-  left: 50%;
-  top: 0;
-  transform: translateX(-50%);
-}
-
-/* horizontal line */
-.intersection::after {
-  height: 1px;
-  width: 100%;
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-}
-
-.gomoku-cell {
-    width: 32px;
-    height: 32px;
-    background-color: #deb887;
-    border: 1px solid #8b4513;
-    border-radius: 2px;
-    font-size: 14px;
+.status-container {
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #2196f3;
+    color: white;
+    border-radius: 10px;
+    font-size: 1.2rem;
     font-weight: bold;
+    min-height: 50px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
 }
 
-.gomoku-cell:hover:not(:disabled) {
-    background-color: #f5deb3;
-    transform: scale(1.05);
+.loading-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
-.gomoku-cell:disabled {
-    cursor: default;
+.loading-animation {
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
 }
 
 
-/* TODO update this */
-.last-move {
-    background-color: #ffeb3b !important;
-    box-shadow: 0 0 0 2px #ff9800;
+/* Styles for board */
+.gomoku-board {
+    position: relative;
+    background-color: #dba65b;
+    border: 2px solid #333;
+    margin: 20px auto;
+}
+
+/* Draw grid lines */
+.gomoku-board::before,
+.gomoku-board::after {
+    content: "";
+    position: absolute;
+}
+
+.gomoku-board-intersection-center {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    color: black;    
+}
+
+.gomoku-board-intersection {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    transform: translate(-50%, -50%);
+}
+
+/* shared styles for both vertical and horizontal lines */
+.gomoku-board-intersection::before,
+.gomoku-board-intersection::after {
+    content: "";
+    position: absolute;
+    background-color: #333;
+}
+
+/* vertical line */
+.gomoku-board-intersection::before {
+    width: 1px;
+    height: 100%;
+    left: 50%;
+    top: 0;
+    transform: translateX(-50%);
+}
+
+/* horizontal line */
+.gomoku-board-intersection::after {
+    height: 1px;
+    width: 100%;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+}
+
+/* Stones */
+.stone {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 3px rgba(0, 0, 0, 0.4);
+}
+
+.stone.black {
+    background-color: black;
+}
+
+.stone.white {
+    background-color: white;
+    border: 1px solid #888;
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }

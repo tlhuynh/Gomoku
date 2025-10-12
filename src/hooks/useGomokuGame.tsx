@@ -3,11 +3,13 @@ import type { GameState, Move, AIResponse, Difficulty } from '../types/interface
 
 class GomokuGame {
   private boardSize: number;
+  private firstMovePlayer: number;
   private gameState: GameState;
   private apiUrl: string; // TODO this might be able to use a constant value
   
-  constructor(boardSize: number = 15, apiUrl: string = '/api') {
+  constructor(boardSize: number = 15, firstMovePlayer = "1", apiUrl: string = '/api') {
     this.boardSize = boardSize;
+    this.firstMovePlayer = +firstMovePlayer; // TODO make sure to check this for potential failure
     this.apiUrl = apiUrl;
     this.gameState = this.initializeGame();
   }
@@ -19,7 +21,7 @@ class GomokuGame {
     
     return {
       board,
-      currentPlayer: 1, // Human starts
+      currentPlayer: this.firstMovePlayer,
       gameStatus: 'playing'
     };
   }
@@ -187,15 +189,16 @@ class GomokuGame {
     this.gameState = this.initializeGame();
   }
 
+  // TODO might not need this
   // Get cell display value
-  getCellValue(row: number, col: number): string {
-    const value = this.gameState.board[row][col];
-    switch (value) {
-      case 1: return '●'; // Human (black)
-      case 2: return '○'; // AI (white)
-      default: return '';
-    }
-  }
+  // getCellValue(row: number, col: number): string {
+  //   const value = this.gameState.board[row][col];
+  //   switch (value) {
+  //     case 1: return '●'; // Human (black)
+  //     case 2: return '○'; // AI (white)
+  //     default: return '';
+  //   }
+  // }
 
   // Check if it's human's turn
   isHumanTurn(): boolean {
@@ -218,12 +221,19 @@ class GomokuGame {
 }
 
 // Custom Hook for Gomoku Game
-const useGomokuGame = (boardSize: number = 15, apiUrl: string = 'http://localhost:8000') => { // TODO update default api
-  const [game] = useState(() => new GomokuGame(boardSize, apiUrl));
+const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1", apiUrl: string = 'http://localhost:8000') => { // TODO update default api
+  const [game] = useState(() => new GomokuGame(boardSize, firstMovePlayer, apiUrl));
   const [gameState, setGameState] = useState(game.getGameState());
   const [isLoading, setIsLoading] = useState(false);
 
   const makeMove = useCallback(async (row: number, col: number) => {
+
+    console.log("Move to make is: " + row + "-" + col);
+
+
+
+
+
     if (!game.isHumanTurn() || isLoading) return;
     
     setIsLoading(true);
@@ -245,7 +255,6 @@ const useGomokuGame = (boardSize: number = 15, apiUrl: string = 'http://localhos
     makeMove,
     resetGame,
     isLoading,
-    getCellValue: (row: number, col: number) => game.getCellValue(row, col),
     getStatusMessage: () => game.getStatusMessage(),
     boardSize: game.getBoardSize()
   };
