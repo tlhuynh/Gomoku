@@ -1,13 +1,15 @@
 import { useCallback, useState } from 'react';
 import type { GameState, Move, AIResponse, Difficulty } from '../types/interfaces';
+import { API_URL } from '../constants';
 
 class GomokuGame {
   private boardSize: number;
   private firstMovePlayer: number;
+
   private gameState: GameState;
   private apiUrl: string; // TODO this might be able to use a constant value
   
-  constructor(boardSize: number = 15, firstMovePlayer = "1", apiUrl: string = '/api') {
+  constructor(boardSize: number = 15, firstMovePlayer = "1", apiUrl: string = API_URL) {
     this.boardSize = boardSize;
     this.firstMovePlayer = +firstMovePlayer; // TODO make sure to check this for potential failure
     this.apiUrl = apiUrl;
@@ -22,7 +24,7 @@ class GomokuGame {
     return {
       board,
       currentPlayer: this.firstMovePlayer,
-      gameStatus: 'playing'
+      gameStatus: 'playing' // TODO update this
     };
   }
 
@@ -209,12 +211,12 @@ class GomokuGame {
   getStatusMessage(): string {
     switch (this.gameState.gameStatus) {
       case 'human_wins': return 'You win! 🎉';
-      case 'ai_wins': return 'AI wins! 🤖';
+      case 'ai_wins': return 'AI wins! 🤖'; // TODO update this when implementing human player 2
       case 'draw': return "It's a draw! 🤝";
       case 'playing':
         return this.gameState.currentPlayer === 1 
-          ? 'Your turn' 
-          : 'AI is thinking...';
+          ? 'Player 1 turn' 
+          : 'AI is thinking...'; // TODO update this when implementing human player 2
       default: return '';
     }
   }
@@ -227,13 +229,6 @@ const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1", apiUrl: st
   const [isLoading, setIsLoading] = useState(false);
 
   const makeMove = useCallback(async (row: number, col: number) => {
-
-    console.log("Move to make is: " + row + "-" + col);
-
-
-
-
-
     if (!game.isHumanTurn() || isLoading) return;
     
     setIsLoading(true);
@@ -249,6 +244,8 @@ const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1", apiUrl: st
     setGameState(game.getGameState());
     setIsLoading(false);
   }, [game]);
+
+  // TODO add a useCalllbacl here for starting game
 
   return {
     gameState,

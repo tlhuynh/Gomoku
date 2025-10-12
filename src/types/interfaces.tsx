@@ -8,7 +8,7 @@ export interface Move {
 export interface GameState {
   board: number[][];
   currentPlayer: number;
-  gameStatus: 'playing' | 'human_wins' | 'ai_wins' | 'draw';
+  gameStatus: 'not_started' | 'playing' | 'human_wins' | 'ai_wins' | 'draw';
   lastMove?: Move;
 }
 

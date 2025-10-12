@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import useGomokuGame from "../hooks/useGomokuGame";
 import "../styles/components.css"
+import { API_URL, BOARD_SIZE, CELL_SIZE } from "../constants";
 
 function GomokuGame() {
-  const BOARD_SIZE = 15; // TODO make this a global constant
-  const CELL_SIZE = 40;
   const [difficulty, setDifficulty] = useState('medium');
   const [firstMovePlayer, setFirstMovePlayer] = useState("1");
   const [gameStarted, setGameStarted] = useState(false)
@@ -15,7 +14,7 @@ function GomokuGame() {
     isLoading,
     getStatusMessage,
     boardSize
-  } = useGomokuGame(BOARD_SIZE, firstMovePlayer, gameStarted, '/api'); // TODO look into removing this if possible, might be related to using constant
+  } = useGomokuGame(BOARD_SIZE, firstMovePlayer, API_URL); // TODO look into removing this if possible, might be related to using constant
 
   // TODO Seems to work as intended between the start and reset but need to implement the start check
   useEffect(() => {
@@ -25,11 +24,10 @@ function GomokuGame() {
     }
   }, [gameStarted, resetGame]);
 
-  // TODO Determines whether 
-  // function isLastMove(row: number, col: number) {
-  //   return gameState.lastMove?.row === row && gameState.lastMove?.col === col;
-  // };
-  // 
+  function isLastMove(row: number, col: number) {
+    return gameState.lastMove?.row === row && gameState.lastMove?.col === col;
+  };
+  
 
   function getStatusColor(): string {
     switch (gameState.gameStatus) {
@@ -64,8 +62,7 @@ function GomokuGame() {
           {Array.from({ length: boardSize * boardSize }, (_, i) => {
             const col = i % boardSize;
             const row = Math.floor(i / boardSize);
-            return (
-              // TODO see if we can implement isLastMove to hight light the stone
+            return (              
               <div>
                 <div
                   key={i}
@@ -94,7 +91,7 @@ function GomokuGame() {
               const keyString: string = rowIndex.toString() + "-" + colIndex.toString();
               return (cell != 0) ? <div
                 key={keyString}
-                className={`stone ${(cell == +firstMovePlayer) ? "black" : "white"}`}
+                className={`stone ${(cell == +firstMovePlayer) ? "black" : "white"} ${isLastMove(rowIndex, colIndex) ? "lastmove" : "" }`}
                 style={{
                   left: `${colIndex * CELL_SIZE}px`,
                   top: `${rowIndex * CELL_SIZE}px`,
@@ -162,7 +159,7 @@ function GomokuGame() {
           </select>
         </div>
 
-        // TODO update this to show different message based on whether game started or not
+        {/* TODO update this to show different message based on whether game started or not */}
         <button
           onClick={() => setGameStarted(false)}
           style={{
@@ -170,7 +167,7 @@ function GomokuGame() {
             fontSize: '16px',
             fontWeight: 'bold',
             color: 'white',
-            backgroundColor: '#4caf50',
+            backgroundColor: '#0b5fdeff',
             border: 'none',
             borderRadius: '8px',
             cursor: 'pointer',
@@ -230,6 +227,7 @@ function GomokuGame() {
         <h3 style={{ color: '#333', marginBottom: '10px' }}>How to Play</h3>
         <p style={{ color: '#666', lineHeight: '1.6' }}>
           Select which player to start first (AI is always player 2).
+          First move always use black stone .
           Click start to begin the game.
           Click on any empty intersection to place your stone.
           Get 5 stones in a row (horizontally, vertically, or diagonally) to win!
