@@ -108,7 +108,6 @@ function GomokuGame() {
         flexWrap: 'wrap',
         justifyContent: 'center'
       }}>
-
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -173,18 +172,7 @@ function GomokuGame() {
             cursor: 'pointer',
             transition: 'all 0.3s ease',
             boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-          }}
-        // onMouseOver={(e) => {
-        //   e.target.style.backgroundColor = '#45a049';
-        //   e.target.style.transform = 'translateY(-2px)';
-        // }}
-        // onMouseOut={(e) => {
-        //   e.target.style.backgroundColor = '#4caf50';
-        //   e.target.style.transform = 'translateY(0)';
-        // }}
-        >
-          Reset
-        </button>
+          }}>Reset</button>
 
         <button
           onClick={() => setGameStarted(true)}
@@ -199,19 +187,7 @@ function GomokuGame() {
             cursor: 'pointer',
             transition: 'all 0.3s ease',
             boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-          }}
-        // onMouseOver={(e) => {
-        //   e.target.style.backgroundColor = '#45a049';
-        //   e.target.style.transform = 'translateY(-2px)';
-        // }}
-        // onMouseOut={(e) => {
-        //   e.target.style.backgroundColor = '#4caf50';
-        //   e.target.style.transform = 'translateY(0)';
-        // }}
-        >
-          Start
-        </button>
-
+          }}>Start</button>
       </div>
 
       {/* Game Rules */}
