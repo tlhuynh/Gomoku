@@ -9,4 +9,7 @@ export default defineConfig({
       '/api': 'http://127.0.0.1:5000', // TODO look into if localhost is better here
     },
   },
+  build: {
+    sourcemap: true
+  }
 })

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import useGomokuGame from "../hooks/useGomokuGame";
 import "../styles/components.css"
-import { API_URL, BOARD_SIZE, CELL_SIZE } from "../constants";
+import { BOARD_SIZE, CELL_SIZE } from "../constants";
 
 function GomokuGame() {
   const [difficulty, setDifficulty] = useState('medium');
@@ -11,24 +11,18 @@ function GomokuGame() {
     gameState,
     makeMove,
     resetGame,
+    startGame,
     isLoading,
     getStatusMessage,
     boardSize
-  } = useGomokuGame(BOARD_SIZE, firstMovePlayer, API_URL); // TODO look into removing this if possible, might be related to using constant
+  } = useGomokuGame(BOARD_SIZE, firstMovePlayer);
 
-  // TODO Seems to work as intended between the start and reset but need to implement the start check
-  useEffect(() => {
-    if (gameStarted == false) {
-      resetGame();
-      console.log("game reset");
-    }
-  }, [gameStarted, resetGame]);
-
+  // Determine whether the move was the most recent
   function isLastMove(row: number, col: number) {
     return gameState.lastMove?.row === row && gameState.lastMove?.col === col;
   };
   
-
+  // Retrieve the color for a specific game status
   function getStatusColor(): string {
     switch (gameState.gameStatus) {
       case 'human_wins': return '#4caf50';
@@ -39,154 +33,128 @@ function GomokuGame() {
   };
 
   return (
-    <div className={`main-container`}>
-      <h1 className={`main-title`}>Gomoku</h1>
-      <div className={`center-container`}>
-        {/* Game Status */}
-        <div className={`status-container`} style={{ backgroundColor: getStatusColor() }}>
+    <div className="main-container">
+      <h1 className="main-title">Gomoku</h1>
+      <div className="center-container">
+        {/* TODO this might need to be updated when human player 2 is implemented */}
+        {/* Game Status */}        
+        <div className="status-container" style={{ backgroundColor: getStatusColor() }}>
           {isLoading ? (
-            <div className={`loading-container`}>
-              <div className={`loading-animation`}></div>
+            <div className="loading-container">
+              <div className="loading-animation"></div>
               AI is thinking...
             </div>
           ) : (
             getStatusMessage()
           )}
         </div>
-
         {/* Game Board */}
-        <div className="gomoku-board" style={{
-          width: `${(boardSize - 1) * CELL_SIZE}px`,
-          height: `${(boardSize - 1) * CELL_SIZE}px`,
-        }}>
-          {Array.from({ length: boardSize * boardSize }, (_, i) => {
-            const col = i % boardSize;
-            const row = Math.floor(i / boardSize);
-            return (              
-              <div>
-                <div
-                  key={i}
-                  className="gomoku-board-intersection"
+        <div style={{ position: 'relative' }}>
+          <div className="gomoku-board" style={{ width: `${(boardSize - 1) * CELL_SIZE}px`, height: `${(boardSize - 1) * CELL_SIZE}px` }}>
+            {/* Draw the board lines */}
+            {Array.from({ length: boardSize * boardSize }, (_, i) => {
+              const col = i % boardSize;
+              const row = Math.floor(i / boardSize);
+              return (
+                // TODO check if there is a better way to handle this without using overlaped div              
+                <div key={i + "container"}>
+                  <div
+                    key={i + " uninteractable"}
+                    className="gomoku-board-intersection"
+                    style={{
+                      left: `${col * CELL_SIZE}px`,
+                      top: `${row * CELL_SIZE}px`,
+                    }}
+                  />
+                  <div
+                    key={i}
+                    className="gomoku-board-intersection-center"
+                    style={{
+                      left: `${col * CELL_SIZE}px`,
+                      top: `${row * CELL_SIZE}px`,
+                    }}
+                    onClick={() => makeMove(row, col)}
+                  />
+                </div>
+              );
+            })}
+            {/* Place stones on the board */}
+            {gameState.board.map((row, rowIndex) =>
+              row.map((cell, colIndex) => {
+                const keyString: string = rowIndex.toString() + "-" + colIndex.toString();
+                return (cell != 0) ? <div
+                  key={keyString}
+                  className={`stone ${(cell == +firstMovePlayer) ? "black" : "white"} ${isLastMove(rowIndex, colIndex) ? "lastmove" : "" }`}
                   style={{
-                    left: `${col * CELL_SIZE}px`,
-                    top: `${row * CELL_SIZE}px`,
-                  }}
-                />
-                <div
-                  key={i}
-                  className="gomoku-board-intersection-center"
-                  style={{
-                    left: `${col * CELL_SIZE}px`,
-                    top: `${row * CELL_SIZE}px`,
-                  }}
-                  onClick={() => makeMove(row, col)}
-                />
-              </div>
+                    left: `${colIndex * CELL_SIZE}px`,
+                    top: `${rowIndex * CELL_SIZE}px`,
+                  }} /> : null
+              })
+            )}
+          </div>
 
-            );
-          })}
-
-          {gameState.board.map((row, rowIndex) =>
-            row.map((cell, colIndex) => {
-              const keyString: string = rowIndex.toString() + "-" + colIndex.toString();
-              return (cell != 0) ? <div
-                key={keyString}
-                className={`stone ${(cell == +firstMovePlayer) ? "black" : "white"} ${isLastMove(rowIndex, colIndex) ? "lastmove" : "" }`}
-                style={{
-                  left: `${colIndex * CELL_SIZE}px`,
-                  top: `${rowIndex * CELL_SIZE}px`,
-                }} /> : null
-            }))}
+          {/* Mask to prevent interaction until the game is started */}
+          {!gameStarted && <div className="gomoku-board-mask">Press Start to Play</div>}
         </div>
       </div>
 
       {/* Controls */}
-      <div style={{
-        display: 'flex',
-        gap: '15px',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        justifyContent: 'center'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
-        }}>
-          <label style={{ fontWeight: 'bold', color: '#333' }}>
+      <div className="controls-container">
+        {/* Control to select which player start first */}
+        <div className="select-dropdown-container">
+          <label className="select-dropdown-label">
             First move:
           </label>
           <select
+            className="select-dropdown"
             value={firstMovePlayer}
-            onChange={(e) => setFirstMovePlayer(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              borderRadius: '5px',
-              border: '2px solid #ddd',
-              fontSize: '14px',
-              backgroundColor: 'white',
-              color: 'black'
-            }}>
+            onChange={(e) => setFirstMovePlayer(e.target.value)}>
             <option value="1">Player one</option>
             <option value="2">Player two</option>
           </select>
         </div>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px'
-        }}>
-          <label style={{ fontWeight: 'bold', color: '#333' }}>
+        {/* Control to select game difficulty */}
+        <div className="select-dropdown-container">
+          <label className="select-dropdown-label">
             Difficulty:
           </label>
           <select
+            className="select-dropdown"
+            disabled={gameStarted}
             value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              borderRadius: '5px',
-              border: '2px solid #ddd',
-              fontSize: '14px',
-              backgroundColor: 'white',
-              color: 'black'
-            }}
-          >
+            onChange={(e) => setDifficulty(e.target.value)}>
             <option value="easy">Easy</option>
             <option value="medium">Medium</option>
             <option value="hard">Hard</option>
           </select>
         </div>
 
-        {/* TODO update this to show different message based on whether game started or not */}
+        {/* Reset button */}
         <button
-          onClick={() => setGameStarted(false)}
-          style={{
-            padding: '12px 24px',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            color: 'white',
-            backgroundColor: '#0b5fdeff',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+          className="control-button reset"
+          disabled={!gameStarted}      
+          onClick={() => {
+            const gameCompleted: boolean = gameState.gameStatus === 'ai_wins' || gameState.gameStatus === 'human_wins' || gameState.gameStatus === 'draw';
+            if (!gameCompleted) { // Only prompt if the game is still ongoing
+              if (!window.confirm("Are you sure you want to reset the game?")) {
+                return;
+              }
+            }
+            resetGame(+firstMovePlayer);
+            setGameStarted(false);
           }}>Reset</button>
 
+        {/* Start button */}
         <button
-          onClick={() => setGameStarted(true)}
-          style={{
-            padding: '12px 24px',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            color: 'white',
-            backgroundColor: '#4caf50',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            transition: 'all 0.3s ease',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+          className="control-button start"
+          disabled={gameStarted}
+          onClick={() => {
+            const isAllZeros = gameState.board.every(row => row.every(cell => cell === 0));
+            if (isAllZeros) {
+              setGameStarted(true);
+              startGame(+firstMovePlayer);
+            }
           }}>Start</button>
       </div>
 

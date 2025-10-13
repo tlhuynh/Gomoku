@@ -5,14 +5,15 @@ import { API_URL } from '../constants';
 class GomokuGame {
   private boardSize: number;
   private firstMovePlayer: number;
+  private gameDifficulty: Difficulty = "medium"; // Default difficulty
 
   private gameState: GameState;
-  private apiUrl: string; // TODO this might be able to use a constant value
   
-  constructor(boardSize: number = 15, firstMovePlayer = "1", apiUrl: string = API_URL) {
+  constructor(boardSize: number = 15, firstMovePlayer = "1", gameDifficulty: Difficulty = 'medium') {
     this.boardSize = boardSize;
-    this.firstMovePlayer = +firstMovePlayer; // TODO make sure to check this for potential failure
-    this.apiUrl = apiUrl;
+    this.firstMovePlayer = +firstMovePlayer;
+    this.gameDifficulty = gameDifficulty;
+
     this.gameState = this.initializeGame();
   }
 
@@ -20,11 +21,12 @@ class GomokuGame {
     const board = Array(this.boardSize)
       .fill(null)
       .map(() => Array(this.boardSize).fill(0));
-    
+
     return {
       board,
       currentPlayer: this.firstMovePlayer,
-      gameStatus: 'playing' // TODO update this
+      difficulty: this.gameDifficulty,
+      gameStatus: 'not_started'
     };
   }
 
@@ -53,15 +55,15 @@ class GomokuGame {
     this.gameState.currentPlayer = 2;
     
     // Get AI move
-    await this.makeAIMove();
+    await this.makeAIMove(this.gameState.difficulty);
     
     return true;
   }
 
   // Get AI move from backend
-  private async makeAIMove(difficulty: Difficulty = 'medium'): Promise<void> {
+  async makeAIMove(difficulty: Difficulty = 'medium'): Promise<void> {
     try {
-      const response = await fetch(`${this.apiUrl}/ai-move`, { // TODO make sure the name of this route here matches whatever name we use in the backend
+      const response = await fetch(`${API_URL}/ai-move`, { // TODO make sure the name of this route here matches whatever name we use in the backend
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -185,22 +187,19 @@ class GomokuGame {
 
   getBoardSize(): number {
     return this.boardSize;
-  }
+  } 
 
-  resetGame(): void {
+  resetGame(firstMovePlayer: number): void {
+    this.firstMovePlayer = firstMovePlayer;
     this.gameState = this.initializeGame();
   }
 
-  // TODO might not need this
-  // Get cell display value
-  // getCellValue(row: number, col: number): string {
-  //   const value = this.gameState.board[row][col];
-  //   switch (value) {
-  //     case 1: return '●'; // Human (black)
-  //     case 2: return '○'; // AI (white)
-  //     default: return '';
-  //   }
-  // }
+  startGame(firstMovePlayer: number): void {
+    if (this.gameState.gameStatus === 'not_started') {
+      this.gameState.gameStatus = 'playing';
+      this.gameState.currentPlayer = firstMovePlayer;
+    }
+  }
 
   // Check if it's human's turn
   isHumanTurn(): boolean {
@@ -217,20 +216,21 @@ class GomokuGame {
         return this.gameState.currentPlayer === 1 
           ? 'Player 1 turn' 
           : 'AI is thinking...'; // TODO update this when implementing human player 2
+      case 'not_started': return 'Please select who goes first and start the game.';
       default: return '';
     }
   }
 }
 
 // Custom Hook for Gomoku Game
-const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1", apiUrl: string = 'http://localhost:8000') => { // TODO update default api
-  const [game] = useState(() => new GomokuGame(boardSize, firstMovePlayer, apiUrl));
+const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1") => {
+  const [game] = useState(() => new GomokuGame(boardSize, firstMovePlayer));
   const [gameState, setGameState] = useState(game.getGameState());
   const [isLoading, setIsLoading] = useState(false);
 
   const makeMove = useCallback(async (row: number, col: number) => {
     if (!game.isHumanTurn() || isLoading) return;
-    
+
     setIsLoading(true);
     const success = await game.makeHumanMove(row, col);
     if (success) {
@@ -239,18 +239,34 @@ const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1", apiUrl: st
     setIsLoading(false);
   }, [game, isLoading]);
 
-  const resetGame = useCallback(() => {
-    game.resetGame();
+  const resetGame = useCallback((firstMovePlayer: number) => {
+    game.resetGame(firstMovePlayer);
     setGameState(game.getGameState());
     setIsLoading(false);
   }, [game]);
 
-  // TODO add a useCalllbacl here for starting game
+  const startGame = useCallback(async (firstMovePlayer: number) => {
+    // Set the first move player and start the game
+    game.startGame(firstMovePlayer);
+
+    if (firstMovePlayer === 2) { // TODO update this when implementing human player 2
+      // AI goes first
+      setIsLoading(true);
+      await game.makeAIMove().then(() => {
+        setGameState(game.getGameState());
+        setIsLoading(false);
+      });
+    } else {
+      // Human goes first
+      setGameState(game.getGameState());
+    }
+  }, [game]);
 
   return {
     gameState,
     makeMove,
     resetGame,
+    startGame,
     isLoading,
     getStatusMessage: () => game.getStatusMessage(),
     boardSize: game.getBoardSize()

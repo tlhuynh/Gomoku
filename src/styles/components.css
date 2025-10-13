@@ -58,8 +58,24 @@
 .gomoku-board {
     position: relative;
     background-color: #dba65b;
-    border: 25px solid #333;
+    border: 25px solid #693d04;
     margin: 20px auto;
+}
+
+.gomoku-board-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-size: 1.5rem;
+    font-weight: bold;
+    z-index: 1000;
 }
 
 /* Draw grid lines */
@@ -104,7 +120,7 @@
 .gomoku-board-intersection::after {
     content: "";
     position: absolute;
-    background-color: #333;
+    background-color: #693d04;
 }
 
 /* vertical line */
@@ -124,6 +140,73 @@
     left: 0;
     transform: translateY(-50%);
 }
+
+/* Styles for settings/controls panel */
+.controls-container {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.select-dropdown-label {
+    font-weight: bold;
+    color: #333;
+}
+
+.select-dropdown-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.select-dropdown {
+    padding: 8px 12px;
+    border-radius: 5px;
+    border: 2px solid #ddd;
+    font-size: 14px;
+    background-color: white;
+    color: black;
+}
+
+.control-button {
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.control-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.control-button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.control-button.control-button.reset:disabled,
+.control-button.control-button.start:disabled {
+    background-color: #9e9e9e;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.control-button.reset {
+    background-color: #0b5fdeff;
+}
+
+.control-button.start {
+    background-color: #4caf50;
+}
+
 
 /* Stones */
 .stone {
