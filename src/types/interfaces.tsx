@@ -7,6 +7,7 @@ export interface Move {
 // Contains information of the current state the game is in
 export interface GameState {
   board: number[][];
+  difficulty: Difficulty;
   currentPlayer: number;
   gameStatus: 'not_started' | 'playing' | 'human_wins' | 'ai_wins' | 'draw';
   lastMove?: Move;

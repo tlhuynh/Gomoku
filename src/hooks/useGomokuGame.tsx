@@ -5,12 +5,16 @@ import { API_URL } from '../constants';
 class GomokuGame {
   private boardSize: number;
   private firstMovePlayer: number;
+  private gameDifficulty: Difficulty = "medium"; // Default difficulty
 
   private gameState: GameState;
   
-  constructor(boardSize: number = 15, firstMovePlayer = "1") {
+  constructor(boardSize: number = 15, firstMovePlayer = "1", gameDifficulty: Difficulty = 'medium') {
     this.boardSize = boardSize;
     this.firstMovePlayer = +firstMovePlayer;
+    this.gameDifficulty = gameDifficulty;
+
+    console.log("init game call in constructor");
     this.gameState = this.initializeGame();
   }
 
@@ -18,10 +22,14 @@ class GomokuGame {
     const board = Array(this.boardSize)
       .fill(null)
       .map(() => Array(this.boardSize).fill(0));
+
+    console.log("Game initialized with board size:", this.boardSize, "First move player:", this.firstMovePlayer);
+
     
     return {
       board,
       currentPlayer: this.firstMovePlayer,
+      difficulty: this.gameDifficulty,
       gameStatus: 'not_started'
     };
   }
@@ -51,7 +59,7 @@ class GomokuGame {
     this.gameState.currentPlayer = 2;
     
     // Get AI move
-    await this.makeAIMove();
+    await this.makeAIMove(this.gameState.difficulty);
     
     return true;
   }
@@ -99,6 +107,9 @@ class GomokuGame {
 
   // Fallback random AI move
   private makeRandomAIMove(): void {
+
+    console.log("Making random AI move as fallback");
+
     const availableMoves: Move[] = [];
     
     for (let row = 0; row < this.boardSize; row++) {
@@ -185,13 +196,25 @@ class GomokuGame {
     return this.boardSize;
   }
 
-  startGame(): void {
+  async startGame(firstMovePlayer: number): Promise<boolean> {
     if (this.gameState.gameStatus === 'not_started') {
       this.gameState.gameStatus = 'playing';
+      this.gameState.currentPlayer = firstMovePlayer;
+      console.log("Game started with first move player:", firstMovePlayer);
     }
+    console.log("is this true or flase" + this.isHumanTurn());
+    if (!this.isHumanTurn()) {
+      console.log("AI making first move");
+      await this.makeAIMove(this.gameState.difficulty);
+      return true;
+    }
+
+    return false;
   }
 
-  resetGame(): void {
+  resetGame(firstMovePlayer: number): void {
+    console.log("This is being called some how");
+    this.firstMovePlayer = firstMovePlayer;
     this.gameState = this.initializeGame();
   }
 
@@ -232,14 +255,14 @@ const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1") => {
     setIsLoading(false);
   }, [game, isLoading]);
 
-  const resetGame = useCallback(() => {
-    game.resetGame();
+  const resetGame = useCallback((firstMovePlayer: number) => {
+    game.resetGame(firstMovePlayer);
     setGameState(game.getGameState());
     setIsLoading(false);
   }, [game]);
 
-  const startGame = useCallback(() => {
-    game.startGame();
+  const startGame = useCallback((firstMovePlayer: number) => {
+    game.startGame(firstMovePlayer);
     setGameState(game.getGameState());
   }, [game]);
 

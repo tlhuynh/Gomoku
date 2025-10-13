@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import useGomokuGame from "../hooks/useGomokuGame";
 import "../styles/components.css"
 import { BOARD_SIZE, CELL_SIZE } from "../constants";
@@ -17,16 +17,24 @@ function GomokuGame() {
     boardSize
   } = useGomokuGame(BOARD_SIZE, firstMovePlayer);
 
-  // Track when gameStarted is set back to false before calling resetGame()
+  // Track initial mount to prevent double initialization
+  const isInitialMount = useRef(true);
+
+  // Handle game state changes
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
     if (gameStarted) {
-      startGame();
+      startGame(+firstMovePlayer);
       console.log("game started");
     } else {
-      resetGame();
+      resetGame(+firstMovePlayer);
       console.log("game reset");
     }
-  }, [gameStarted, resetGame, startGame]);
+  }, [gameStarted, firstMovePlayer, resetGame, startGame]);
 
   // Determine whether the move was the most recent
   function isLastMove(row: number, col: number) {
@@ -71,9 +79,9 @@ function GomokuGame() {
               const row = Math.floor(i / boardSize);
               return (
                 // TODO check if there is a better way to handle this without using overlaped div              
-                <div>
+                <div key={i + "container"}>
                   <div
-                    key={i}
+                    key={i + " uninteractable"}
                     className="gomoku-board-intersection"
                     style={{
                       left: `${col * CELL_SIZE}px`,
@@ -132,6 +140,7 @@ function GomokuGame() {
           </label>
           <select
             className="select-dropdown"
+            disabled={gameStarted}
             value={difficulty}
             onChange={(e) => setDifficulty(e.target.value)}>
             <option value="easy">Easy</option>
