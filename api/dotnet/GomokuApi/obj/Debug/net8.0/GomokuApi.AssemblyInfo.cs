@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GomokuApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9c4fafd5cb89bd6909a095c567c5cf39573ed6da")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+227c9b9d66cf720fa0d6d8b50e72e4e3e3a4f900")]
 [assembly: System.Reflection.AssemblyProductAttribute("GomokuApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GomokuApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -8,11 +8,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Add CORS
-builder.Services.AddCors(options =>
-{
+builder.Services.AddCors(options => {
     options.AddPolicy("AllowReactApp",
-        builder =>
-        {
+        builder => {
             builder.WithOrigins("http://localhost:5173") // Your Vite React app's URL
                    .AllowAnyMethod()
                    .AllowAnyHeader();
@@ -25,8 +23,7 @@ builder.Services.AddScoped<IGomokuService, GomokuService>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
+if (app.Environment.IsDevelopment()) {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
