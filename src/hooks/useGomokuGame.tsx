@@ -63,7 +63,7 @@ class GomokuGame {
   // Get AI move from backend
   async makeAIMove(difficulty: Difficulty = 'medium'): Promise<void> {
     try {
-      const response = await fetch(`${API_URL}/ai-move`, { // TODO make sure the name of this route here matches whatever name we use in the backend
+      const response = await fetch(`${API_URL}/game/ai-move`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
