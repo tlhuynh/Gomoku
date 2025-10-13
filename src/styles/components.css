@@ -58,7 +58,7 @@
 .gomoku-board {
     position: relative;
     background-color: #dba65b;
-    border: 25px solid #333;
+    border: 25px solid #693d04;
     margin: 20px auto;
 }
 
@@ -120,7 +120,7 @@
 .gomoku-board-intersection::after {
     content: "";
     position: absolute;
-    background-color: #333;
+    background-color: #693d04;
 }
 
 /* vertical line */
@@ -192,7 +192,8 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.control-button:disabled {
+.control-button.control-button.reset:disabled,
+.control-button.control-button.start:disabled {
     background-color: #9e9e9e;
     cursor: not-allowed;
     box-shadow: none;

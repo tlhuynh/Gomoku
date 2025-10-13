@@ -14,7 +14,6 @@ class GomokuGame {
     this.firstMovePlayer = +firstMovePlayer;
     this.gameDifficulty = gameDifficulty;
 
-    console.log("init game call in constructor");
     this.gameState = this.initializeGame();
   }
 
@@ -23,9 +22,6 @@ class GomokuGame {
       .fill(null)
       .map(() => Array(this.boardSize).fill(0));
 
-    console.log("Game initialized with board size:", this.boardSize, "First move player:", this.firstMovePlayer);
-
-    
     return {
       board,
       currentPlayer: this.firstMovePlayer,
@@ -65,7 +61,7 @@ class GomokuGame {
   }
 
   // Get AI move from backend
-  private async makeAIMove(difficulty: Difficulty = 'medium'): Promise<void> {
+  async makeAIMove(difficulty: Difficulty = 'medium'): Promise<void> {
     try {
       const response = await fetch(`${API_URL}/ai-move`, { // TODO make sure the name of this route here matches whatever name we use in the backend
         method: 'POST',
@@ -107,9 +103,6 @@ class GomokuGame {
 
   // Fallback random AI move
   private makeRandomAIMove(): void {
-
-    console.log("Making random AI move as fallback");
-
     const availableMoves: Move[] = [];
     
     for (let row = 0; row < this.boardSize; row++) {
@@ -194,28 +187,18 @@ class GomokuGame {
 
   getBoardSize(): number {
     return this.boardSize;
+  } 
+
+  resetGame(firstMovePlayer: number): void {
+    this.firstMovePlayer = firstMovePlayer;
+    this.gameState = this.initializeGame();
   }
 
-  async startGame(firstMovePlayer: number): Promise<boolean> {
+  startGame(firstMovePlayer: number): void {
     if (this.gameState.gameStatus === 'not_started') {
       this.gameState.gameStatus = 'playing';
       this.gameState.currentPlayer = firstMovePlayer;
-      console.log("Game started with first move player:", firstMovePlayer);
     }
-    console.log("is this true or flase" + this.isHumanTurn());
-    if (!this.isHumanTurn()) {
-      console.log("AI making first move");
-      await this.makeAIMove(this.gameState.difficulty);
-      return true;
-    }
-
-    return false;
-  }
-
-  resetGame(firstMovePlayer: number): void {
-    console.log("This is being called some how");
-    this.firstMovePlayer = firstMovePlayer;
-    this.gameState = this.initializeGame();
   }
 
   // Check if it's human's turn
@@ -233,6 +216,7 @@ class GomokuGame {
         return this.gameState.currentPlayer === 1 
           ? 'Player 1 turn' 
           : 'AI is thinking...'; // TODO update this when implementing human player 2
+      case 'not_started': return 'Please select who goes first and start the game.';
       default: return '';
     }
   }
@@ -246,7 +230,7 @@ const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1") => {
 
   const makeMove = useCallback(async (row: number, col: number) => {
     if (!game.isHumanTurn() || isLoading) return;
-    
+
     setIsLoading(true);
     const success = await game.makeHumanMove(row, col);
     if (success) {
@@ -261,9 +245,21 @@ const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1") => {
     setIsLoading(false);
   }, [game]);
 
-  const startGame = useCallback((firstMovePlayer: number) => {
+  const startGame = useCallback(async (firstMovePlayer: number) => {
+    // Set the first move player and start the game
     game.startGame(firstMovePlayer);
-    setGameState(game.getGameState());
+
+    if (firstMovePlayer === 2) { // TODO update this when implementing human player 2
+      // AI goes first
+      setIsLoading(true);
+      await game.makeAIMove().then(() => {
+        setGameState(game.getGameState());
+        setIsLoading(false);
+      });
+    } else {
+      // Human goes first
+      setGameState(game.getGameState());
+    }
   }, [game]);
 
   return {

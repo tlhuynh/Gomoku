@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useState } from "react";
 import useGomokuGame from "../hooks/useGomokuGame";
 import "../styles/components.css"
 import { BOARD_SIZE, CELL_SIZE } from "../constants";
@@ -16,25 +16,6 @@ function GomokuGame() {
     getStatusMessage,
     boardSize
   } = useGomokuGame(BOARD_SIZE, firstMovePlayer);
-
-  // Track initial mount to prevent double initialization
-  const isInitialMount = useRef(true);
-
-  // Handle game state changes
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    if (gameStarted) {
-      startGame(+firstMovePlayer);
-      console.log("game started");
-    } else {
-      resetGame(+firstMovePlayer);
-      console.log("game reset");
-    }
-  }, [gameStarted, firstMovePlayer, resetGame, startGame]);
 
   // Determine whether the move was the most recent
   function isLastMove(row: number, col: number) {
@@ -70,9 +51,6 @@ function GomokuGame() {
         {/* Game Board */}
         <div style={{ position: 'relative' }}>
           <div className="gomoku-board" style={{ width: `${(boardSize - 1) * CELL_SIZE}px`, height: `${(boardSize - 1) * CELL_SIZE}px` }}>
-            {/* Mask to prevent interaction until the game is started */}
-            {!gameStarted && <div className="gomoku-board-mask">Press Start to Play</div>}
-
             {/* Draw the board lines */}
             {Array.from({ length: boardSize * boardSize }, (_, i) => {
               const col = i % boardSize;
@@ -114,6 +92,9 @@ function GomokuGame() {
               })
             )}
           </div>
+
+          {/* Mask to prevent interaction until the game is started */}
+          {!gameStarted && <div className="gomoku-board-mask">Press Start to Play</div>}
         </div>
       </div>
 
@@ -151,15 +132,30 @@ function GomokuGame() {
 
         {/* Reset button */}
         <button
-          className="control-button reset"          
-          onClick={() => setGameStarted(false)}>Reset</button>
+          className="control-button reset"
+          disabled={!gameStarted}      
+          onClick={() => {
+            const gameCompleted: boolean = gameState.gameStatus === 'ai_wins' || gameState.gameStatus === 'human_wins' || gameState.gameStatus === 'draw';
+            if (!gameCompleted) { // Only prompt if the game is still ongoing
+              if (!window.confirm("Are you sure you want to reset the game?")) {
+                return;
+              }
+            }
+            resetGame(+firstMovePlayer);
+            setGameStarted(false);
+          }}>Reset</button>
 
         {/* Start button */}
         <button
           className="control-button start"
           disabled={gameStarted}
-          style={{ backgroundColor: gameStarted ? '#9e9e9e' : '#4caf50', cursor: gameStarted ? 'not-allowed' : 'pointer' }}
-          onClick={() => setGameStarted(true)}>Start</button>
+          onClick={() => {
+            const isAllZeros = gameState.board.every(row => row.every(cell => cell === 0));
+            if (isAllZeros) {
+              setGameStarted(true);
+              startGame(+firstMovePlayer);
+            }
+          }}>Start</button>
       </div>
 
       {/* Game Rules */}
