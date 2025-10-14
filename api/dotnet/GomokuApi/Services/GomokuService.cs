@@ -245,10 +245,10 @@ public class GomokuService : IGomokuService {
         // Score based on patterns
         foreach (var player in counts.Keys) {
             int count = counts[player];
-            if (count >= GameConstants.WIN_LENGTH) return player == 1 ? MAX_SCORE : MIN_SCORE;
-            if (count == 4 && spaces > 0) return player == 1 ? 1000 : -1000;
-            if (count == 3 && spaces > 1) return player == 1 ? 100 : -100;
-            if (count == 2 && spaces > 2) return player == 1 ? 10 : -10;
+            if (count >= GameConstants.WIN_LENGTH) return player == 2 ? MAX_SCORE : MIN_SCORE;
+            if (count == 4 && spaces > 0) return player == 2 ? 1000 : -1000;
+            if (count == 3 && spaces > 1) return player == 2 ? 100 : -100;
+            if (count == 2 && spaces > 2) return player == 2 ? 10 : -10;
         }
 
         return 0;

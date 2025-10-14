@@ -32,7 +32,7 @@ class GomokuGame {
   }
 
   // Make a human move
-  async makeHumanMove(row: number, col: number): Promise<boolean> {
+  makeHumanMove(row: number, col: number): boolean {
     if (!this.isValidMove(row, col)) {
       return false;
     }
@@ -54,9 +54,6 @@ class GomokuGame {
 
     // Switch to AI turn
     this.gameState.currentPlayer = 2;
-    
-    // Get AI move
-    await this.makeAIMove(this.gameState.difficulty);
     
     return true;
   }
@@ -262,9 +259,18 @@ const useGomokuGame = (boardSize: number = BOARD_SIZE, firstMovePlayer = "1") =>
     if (!game.isHumanTurn() || isLoading) return;
 
     setIsLoading(true);
-    const success = await game.makeHumanMove(row, col);
+    // Handle human move first
+    const success: boolean = game.makeHumanMove(row, col);
     if (success) {
       setGameState(game.getGameState());
+      
+      // Check if game is still in progress before making AI move
+      const currentState = game.getGameState();
+      if (currentState.gameStatus === 'playing' && currentState.currentPlayer === 2) {
+        // Now handle AI move separately
+        await game.makeAIMove(currentState.difficulty);
+        setGameState(game.getGameState());
+      }
     }
     setIsLoading(false);
   }, [game, isLoading]);
