@@ -28,8 +28,17 @@ public interface IGomokuService {
     /// </summary>
     /// <param name="gameState">Current state of the game</param>
     /// <param name="move">The move to apply</param>
+    /// <param name="playerToMove">Player to make the move</param>
     /// <returns>New game state after the move is applied</returns>
-    GameStateModel MakeMove(GameStateModel gameState, MoveModel move);
+    GameStateModel MakeMove(GameStateModel gameState, MoveModel move, int playerToMove);
+
+    /// <summary>
+    /// Checks if the last move created a winning condition (5 or more stones in a row)
+    /// </summary>
+    /// <param name="gameState">Current game state</param>
+    /// <param name="lastMove">The most recent move that was made</param>
+    /// <returns>True if the move created a winning condition, false otherwise</returns>
+    public bool CheckWin(GameStateModel gameState, MoveModel lastMove);
 }
 
 /// <summary>
@@ -61,7 +70,7 @@ public class GomokuService : IGomokuService {
         List<MoveModel> validMoves = GetNearbyEmptySpaces(gameState);
 
         foreach (var move in validMoves) {
-            var newState = MakeMove(gameState, move);
+            var newState = MakeMove(gameState, move, 2); // AI is making this move (player 2)
             var score = Minimax(newState, depth - 1, MIN_SCORE, MAX_SCORE, false);
 
             if (score > bestScore) {
@@ -96,7 +105,7 @@ public class GomokuService : IGomokuService {
         if (isMaximizing) {
             var maxScore = MIN_SCORE;
             foreach (var move in validMoves) {
-                var newState = MakeMove(state, move);
+                var newState = MakeMove(state, move, 2); // Player 2 (AI) is maximizing
                 var score = Minimax(newState, depth - 1, alpha, beta, false);
                 maxScore = Math.Max(maxScore, score);
                 alpha = Math.Max(alpha, score);
@@ -106,7 +115,7 @@ public class GomokuService : IGomokuService {
         } else {
             var minScore = MAX_SCORE;
             foreach (var move in validMoves) {
-                var newState = MakeMove(state, move);
+                var newState = MakeMove(state, move, 1); // Player 1 (Human) is minimizing
                 var score = Minimax(newState, depth - 1, alpha, beta, true);
                 minScore = Math.Min(minScore, score);
                 beta = Math.Min(beta, score);
@@ -124,22 +133,14 @@ public class GomokuService : IGomokuService {
     /// <returns>List of valid moves near existing pieces</returns>
     private List<MoveModel> GetNearbyEmptySpaces(GameStateModel state) {
         List<MoveModel> moves = [];
-        bool hasAnyPieces = false;
 
-        // Check if board is empty
-        for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
-            for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
-                if (state.Board[i, j] != 0) {
-                    hasAnyPieces = true;
-                    break;
-                }
-            }
-            if (hasAnyPieces) break;
-        }
-
-        // If board is empty, return center position
-        if (!hasAnyPieces) {
-            return [new MoveModel { Row = GameConstants.BOARD_SIZE / 2, Col = GameConstants.BOARD_SIZE / 2 }];
+        // Check if board is empty using more efficient method
+        if (state.Board.Cast<int>().All(cell => cell == 0)) {
+            // If board is empty, return center position
+            return [new MoveModel {
+            Row = GameConstants.BOARD_SIZE / 2,
+            Col = GameConstants.BOARD_SIZE / 2
+        }];
         }
 
         // Find empty spaces near existing pieces
@@ -162,7 +163,7 @@ public class GomokuService : IGomokuService {
     /// <param name="col">Column index to check</param>
     /// <param name="distance">Maximum distance to check for adjacent pieces</param>
     /// <returns>True if there is at least one piece within the specified distance</returns>
-    private bool HasAdjacentPiece(GameStateModel state, int row, int col, int distance = 2) {
+    private static bool HasAdjacentPiece(GameStateModel state, int row, int col, int distance = 2) {
         for (int i = Math.Max(0, row - distance); i <= Math.Min(GameConstants.BOARD_SIZE - 1, row + distance); i++) {
             for (int j = Math.Max(0, col - distance); j <= Math.Min(GameConstants.BOARD_SIZE - 1, col + distance); j++) {
                 if (state.Board[i, j] != 0)
@@ -307,7 +308,8 @@ public class GomokuService : IGomokuService {
         int count = 0;
         int row = move.Row + drow;
         int col = move.Col + dcol;
-        int player = 2; // AI is always player 2
+        // Get the player from the position of the last move
+        int player = gameState.Board[move.Row, move.Col];
 
         while (row >= 0 && row < GameConstants.BOARD_SIZE && col >= 0 && col < GameConstants.BOARD_SIZE &&
                gameState.Board[row, col] == player) {
@@ -325,8 +327,9 @@ public class GomokuService : IGomokuService {
     /// </summary>
     /// <param name="gameState">Current game state</param>
     /// <param name="move">The move to apply</param>
+    /// <param name="playerToMove">Player to make the move</param>
     /// <returns>New game state after the move is applied, or original state if move is invalid</returns>
-    public GameStateModel MakeMove(GameStateModel gameState, MoveModel move) {
+    public GameStateModel MakeMove(GameStateModel gameState, MoveModel move, int playerToMove) {
         if (!IsValidMove(gameState, move))
             return gameState;
 
@@ -335,7 +338,9 @@ public class GomokuService : IGomokuService {
             Difficulty = gameState.Difficulty
         };
 
-        newState.Board[move.Row, move.Col] = 2; // AI is always player 2
+        // In GetBestMove, this will be the AI (player 2)
+        // In Minimax, this will alternate between players based on isMaximizing
+        newState.Board[move.Row, move.Col] = playerToMove;
         return newState;
     }
 }
