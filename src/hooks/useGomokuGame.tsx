@@ -6,6 +6,7 @@ class GomokuGame {
   private boardSize: number;
   private firstMovePlayer: number;
   private gameDifficulty: Difficulty = "medium"; // Default difficulty
+  private abortController: AbortController | null = null;
 
   private gameState: GameState;
   
@@ -62,7 +63,15 @@ class GomokuGame {
 
   // Get AI move from backend
   async makeAIMove(difficulty: Difficulty = 'medium'): Promise<void> {
-    try {      
+    try {
+      // Cancel any previous request
+      if (this.abortController) {
+        this.abortController.abort();
+      }
+      
+      // Create a new abort controller
+      this.abortController = new AbortController();
+      
       const response = await fetch(`${API_URL}/game/ai-move`, {
         method: 'POST',
         headers: {
@@ -71,8 +80,12 @@ class GomokuGame {
         body: JSON.stringify({
           board: this.gameState.board,
           difficulty: difficulty
-        })
+        }),
+        signal: this.abortController.signal
       });
+      
+      // Request completed, clear the controller
+      this.abortController = null;
 
       if (!response.ok) {
         throw new Error('Failed to get AI move');
@@ -95,8 +108,14 @@ class GomokuGame {
       }
       
     } catch (error) {
+      // Check if this was an abort error (which is expected during cancellation)
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        console.log('AI move request was cancelled');
+        return; // Don't do fallback for intentional cancellation
+      }
+      
       console.error('Error getting AI move:', error);
-      // Fallback to random move if API fails
+      // Fallback to random move if API fails for other reasons
       this.makeRandomAIMove();
     }
   }
@@ -189,7 +208,18 @@ class GomokuGame {
     return this.boardSize;
   } 
 
+  // Add method to cancel any pending request
+  cancelPendingRequests(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
+
   resetGame(firstMovePlayer: number): void {
+    // Cancel any pending AI moves before resetting
+    this.cancelPendingRequests();
+    
     this.firstMovePlayer = firstMovePlayer;
     this.gameState = this.initializeGame();
   }

@@ -8,8 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "flask-api": "cd api && flask run --no-debugger",
-    "dotnet-api": "cd ../Gomoku.Api && dotnet watch run",
+    "flask-api": "cd api/flask && flask run --no-debugger",
+    "dotnet-api": "cd api/dotnet/GomokuApi && dotnet watch run",
     "test": "vitest"
   },
   "dependencies": {
