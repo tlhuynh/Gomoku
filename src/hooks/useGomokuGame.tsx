@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import type { GameState, Move, AIResponse, Difficulty } from '../types/interfaces';
-import { API_URL } from '../constants';
+import type { GameState, Move, Difficulty } from '../types/interfaces';
+import { API_URL, BOARD_SIZE } from '../constants';
 
 class GomokuGame {
   private boardSize: number;
@@ -9,7 +9,7 @@ class GomokuGame {
 
   private gameState: GameState;
   
-  constructor(boardSize: number = 15, firstMovePlayer = "1", gameDifficulty: Difficulty = 'medium') {
+  constructor(boardSize: number = BOARD_SIZE, firstMovePlayer = "1", gameDifficulty: Difficulty = 'medium') {
     this.boardSize = boardSize;
     this.firstMovePlayer = +firstMovePlayer;
     this.gameDifficulty = gameDifficulty;
@@ -62,7 +62,7 @@ class GomokuGame {
 
   // Get AI move from backend
   async makeAIMove(difficulty: Difficulty = 'medium'): Promise<void> {
-    try {
+    try {      
       const response = await fetch(`${API_URL}/game/ai-move`, {
         method: 'POST',
         headers: {
@@ -70,16 +70,16 @@ class GomokuGame {
         },
         body: JSON.stringify({
           board: this.gameState.board,
-          difficulty
+          difficulty: difficulty
         })
       });
 
       if (!response.ok) {
         throw new Error('Failed to get AI move');
       }
-
-      const aiMove: AIResponse = await response.json();
       
+      const aiMove: Move = await response.json();
+
       // Make AI move
       this.gameState.board[aiMove.row][aiMove.col] = 2;
       this.gameState.lastMove = { row: aiMove.row, col: aiMove.col };
@@ -223,7 +223,7 @@ class GomokuGame {
 }
 
 // Custom Hook for Gomoku Game
-const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1") => {
+const useGomokuGame = (boardSize: number = BOARD_SIZE, firstMovePlayer = "1") => {
   const [game] = useState(() => new GomokuGame(boardSize, firstMovePlayer));
   const [gameState, setGameState] = useState(game.getGameState());
   const [isLoading, setIsLoading] = useState(false);

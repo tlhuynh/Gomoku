@@ -1,6 +1,7 @@
-using Microsoft.AspNetCore.Mvc;
+using GomokuApi.Mapping;
 using GomokuApi.Models;
 using GomokuApi.Services;
+using Microsoft.AspNetCore.Mvc;
 
 namespace GomokuApi.Controllers;
 
@@ -16,11 +17,15 @@ public class GameController : ControllerBase {
     }
 
     [HttpPost("ai-move")]
-    public ActionResult<Move> GetAIMove([FromBody] GameState gameState) {
+    public ActionResult<MoveResponseModel> GetAIMove([FromBody] GameStateRequestModel request) {
         try {
-            var bestMove = _gomokuService.GetBestMove(gameState);
-            if (bestMove == null)
+            // Map the frontend request to backend model
+            GameStateModel gameState = GameStateMapper.MapFromFrontend(request);
+            // Get the best move from the AI
+            MoveModel? bestMove = _gomokuService.GetBestMove(gameState);
+            if (bestMove == null) {
                 return BadRequest("No valid moves available");
+            }
 
             return Ok(bestMove);
         } catch (Exception ex) {
@@ -28,29 +33,4 @@ public class GameController : ControllerBase {
             return StatusCode(500, "Error calculating move");
         }
     }
-
-    [HttpPost("validate-move")]
-    public ActionResult<bool> ValidateMove([FromBody] MoveRequest request) {
-        try {
-            return Ok(_gomokuService.IsValidMove(request.GameState, request.Move));
-        } catch (Exception ex) {
-            _logger.LogError(ex, "Error validating move");
-            return StatusCode(500, "Error validating move");
-        }
-    }
-
-    [HttpPost("check-win")]
-    public ActionResult<bool> CheckWin([FromBody] MoveRequest request) {
-        try {
-            return Ok(_gomokuService.CheckWin(request.GameState, request.Move));
-        } catch (Exception ex) {
-            _logger.LogError(ex, "Error checking win condition");
-            return StatusCode(500, "Error checking win condition");
-        }
-    }
-}
-
-public class MoveRequest {
-    public GameState GameState { get; set; }
-    public Move Move { get; set; }
 }

@@ -8,12 +8,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Add CORS
+var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ??
+                 ["http://localhost:5173"]; // Default to localhost:5173 (react app URL) if not set
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowReactApp",
-        builder => {
-            builder.WithOrigins("http://localhost:5173") // Your Vite React app's URL
-                   .AllowAnyMethod()
-                   .AllowAnyHeader();
+        policyBuilder => {
+            policyBuilder.WithOrigins(corsOrigins)
+                        .AllowAnyMethod()
+                        .AllowAnyHeader();
         });
 });
 
