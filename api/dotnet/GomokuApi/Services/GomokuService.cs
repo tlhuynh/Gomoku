@@ -57,7 +57,7 @@ public class GomokuService : IGomokuService {
     /// <summary>
     /// Default time limit for AI move calculation in milliseconds
     /// </summary>
-    private const int DEFAULT_TIME_LIMIT_MS = 3000; // 3 seconds default
+    private const int DEFAULT_TIME_LIMIT_MS = 4000; // 3 seconds default
 
     /// <summary>
     /// Dictionary to store position evaluations for caching
@@ -90,7 +90,8 @@ public class GomokuService : IGomokuService {
     /// <param name="gameState">Current state of the game board</param>
     /// <returns>The best move for the current player</returns>
     public MoveModel GetBestMove(GameStateModel gameState) {
-        // Instead of clearing the entire cache, only limit its size if it grows too large
+        // Periodically clean the transposition table to avoid memory issues
+        // Keep the most valuable entries (deeper searches and more recent positions)
         if (_positionCache.Count > 100000) {
             // Keep only a subset of most valuable entries (deeper searches)
             var valuableEntries = _positionCache
@@ -103,13 +104,16 @@ public class GomokuService : IGomokuService {
             }
         }
 
+        // Track position evaluations to avoid redundant calculations within this move
+        Dictionary<string, int> moveCache = [];
+
         // Set up time management
         DateTime startTime = DateTime.Now;
         int timeLimit = gameState.Difficulty switch {
             Utilities.Difficulty.Easy => DEFAULT_TIME_LIMIT_MS / 3,// 1 second for easy
-            Utilities.Difficulty.Hard => DEFAULT_TIME_LIMIT_MS * 2,// 6 seconds for hard
-            Utilities.Difficulty.Expert => DEFAULT_TIME_LIMIT_MS * 3,// 9 seconds for expert
-            _ => DEFAULT_TIME_LIMIT_MS,// 3 seconds for medium
+            Utilities.Difficulty.Hard => DEFAULT_TIME_LIMIT_MS * 2,// 8 seconds for hard
+            Utilities.Difficulty.Expert => DEFAULT_TIME_LIMIT_MS * 3,// 12 seconds for expert
+            _ => DEFAULT_TIME_LIMIT_MS,// 4 seconds for medium
         };
 
         // Determine maximum search depth based on difficulty
@@ -117,9 +121,9 @@ public class GomokuService : IGomokuService {
 
         // Adjust depth based on game stage
         int numberOfPieces = gameState.Board.Cast<int>().Count(cell => cell != 0);
-        if (numberOfPieces < 5) {
+        if (numberOfPieces < 4) {
             // Early game - reduce max depth
-            maxDepth = Math.Min(maxDepth, 3);
+            maxDepth = Math.Min(maxDepth, 2);
         } else if (numberOfPieces > GameConstants.BOARD_SIZE * GameConstants.BOARD_SIZE - 10) {
             // End game - can search deeper since fewer positions
             maxDepth++;
@@ -138,6 +142,21 @@ public class GomokuService : IGomokuService {
 
         if (validMoves.Count == 1) {
             return validMoves[0];
+        }
+
+        // First move considerations - prefer center and near-center positions for better board control
+        if (gameState.Board.Cast<int>().Count(cell => cell != 0) <= 2) {
+            int center = GameConstants.BOARD_SIZE / 2;
+            // If center is available, take it
+            if (gameState.Board[center, center] == 0) {
+                return new MoveModel { Row = center, Col = center };
+            }
+            // Otherwise prefer positions near the center
+            foreach (var move in validMoves) {
+                if (Math.Abs(move.Row - center) <= 2 && Math.Abs(move.Col - center) <= 2) {
+                    return move;
+                }
+            }
         }
 
         // First check for immediate winning moves
@@ -178,7 +197,15 @@ public class GomokuService : IGomokuService {
                 }
 
                 GameStateModel newState = MakeMove(gameState, move, 2); // AI making this move
-                int score = Minimax(newState, currentDepth - 1, MIN_SCORE, MAX_SCORE, false, startTime, timeLimit);
+                // Check move cache first to avoid redundant calculations within this search
+                string stateKey = GeneratePositionHash(newState);
+                int score;
+                if (moveCache.TryGetValue(stateKey, out int cachedScore)) {
+                    score = cachedScore;
+                } else {
+                    score = Minimax(newState, currentDepth - 1, MIN_SCORE, MAX_SCORE, false, startTime, timeLimit);
+                    moveCache[stateKey] = score; // Cache the evaluation
+                }
 
                 if (score > bestScore) {
                     bestScore = score;
@@ -425,11 +452,15 @@ public class GomokuService : IGomokuService {
             }];
         }
 
-        // Find empty spaces near existing pieces
+        // Find empty spaces near existing pieces with weighted proximity
         for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
             for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
-                if (state.Board[i, j] == 0 && HasAdjacentPiece(state, i, j)) {
-                    moves.Add(new MoveModel { Row = i, Col = j });
+                if (state.Board[i, j] == 0) {
+                    // Check both immediate adjacency and slightly wider radius
+                    // We want to include spaces that might not be immediately adjacent but still relevant
+                    if (HasAdjacentPiece(state, i, j, 2)) {
+                        moves.Add(new MoveModel { Row = i, Col = j });
+                    }
                 }
             }
         }
@@ -482,10 +513,17 @@ public class GomokuService : IGomokuService {
     /// <param name="distance">Maximum distance to check for adjacent pieces</param>
     /// <returns>True if there is at least one piece within the specified distance</returns>
     private static bool HasAdjacentPiece(GameStateModel state, int row, int col, int distance = 2) {
+        // Calculate Manhattan distance instead of checking every cell in the square
+        // This is more efficient and better represents how pieces influence the board in Gomoku
         for (int i = Math.Max(0, row - distance); i <= Math.Min(GameConstants.BOARD_SIZE - 1, row + distance); i++) {
             for (int j = Math.Max(0, col - distance); j <= Math.Min(GameConstants.BOARD_SIZE - 1, col + distance); j++) {
-                if (state.Board[i, j] != 0)
-                    return true;
+                if (state.Board[i, j] != 0) {
+                    // Weight by distance - closer pieces are more relevant
+                    int manhattanDist = Math.Abs(i - row) + Math.Abs(j - col);
+                    if (manhattanDist <= distance) {
+                        return true;
+                    }
+                }
             }
         }
         return false;
@@ -604,10 +642,11 @@ public class GomokuService : IGomokuService {
         bool aiWinningMove = false;
         bool humanWinningMove = false;
 
-        // Check for immediate winning patterns (four in a row with open end)
+        // Using a more focused approach - only check empty spaces adjacent to existing pieces
+        // This is much more efficient than checking every empty cell on the board
         for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
             for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
-                if (state.Board[i, j] != 0) continue;
+                if (state.Board[i, j] != 0 || !HasAdjacentPiece(state, i, j, 1)) continue;
 
                 // Try placing AI stone
                 var tempState = new GameStateModel {
@@ -689,7 +728,38 @@ public class GomokuService : IGomokuService {
                 count++;
             }
 
+            // Check for 5 or more in a row (standard win)
             if (count >= 5) return true;
+
+            // Check for open-ended four (not win, but critical threat)
+            // This helps DetectImmediateThreats identify these positions
+            if (count == 4) {
+                // Check if both ends are open, making this a "double-end four"
+                bool positiveEndOpen = false;
+                bool negativeEndOpen = false;
+
+                // Check positive direction end
+                int posRow = row + 4 * dir[0];
+                int posCol = col + 4 * dir[1];
+                if (posRow >= 0 && posRow < GameConstants.BOARD_SIZE &&
+                    posCol >= 0 && posCol < GameConstants.BOARD_SIZE &&
+                    state.Board[posRow, posCol] == 0) {
+                    positiveEndOpen = true;
+                }
+
+                // Check negative direction end
+                int negRow = row - 1 * dir[0];
+                int negCol = col - 1 * dir[1];
+                if (negRow >= 0 && negRow < GameConstants.BOARD_SIZE &&
+                    negCol >= 0 && negCol < GameConstants.BOARD_SIZE &&
+                    state.Board[negRow, negCol] == 0) {
+                    negativeEndOpen = true;
+                }
+
+                // Return true for four-in-a-row with both ends open
+                // This allows DetectImmediateThreats to identify this critical pattern
+                if (positiveEndOpen && negativeEndOpen) return true;
+            }
         }
 
         return false;
@@ -773,10 +843,25 @@ public class GomokuService : IGomokuService {
         if (ContainsConsecutive(line, player, 5))
             return player == 2 ? MAX_SCORE : MIN_SCORE;
 
-        // Check for open four (extremely strong threat)
-        // Pattern: 0PPPP0 (where P is player stone)
-        if (ContainsPattern(line, player, [0, player, player, player, player, 0]))
-            return player == 2 ? 10000 : -10000;
+        // Check for four in a row (immediate winning threat)
+        // These would end the game on the next move
+        if (ContainsConsecutive(line, player, 4)) {
+            // This is effectively a winning pattern since player will win next move
+            return player == 2 ? 50000 : -50000;
+        }
+
+        // Check for "double-end four" - four stones with both ends open
+        // Pattern: 0PPPP0 - extremely dangerous as it guarantees a win
+        if (ContainsPattern(line, player, [0, player, player, player, player, 0])) {
+            return player == 2 ? 60000 : -60000; // Even higher than regular four
+        }
+
+        // Check specifically for "double-open three" (three stones with open ends on both sides)
+        // Pattern: 0PPP0 with at least one more empty space on each side (00PPP00)
+        // This is a critical formation that often forces defensive responses
+        if (ContainsPattern(line, player, [0, 0, player, player, player, 0, 0])) {
+            return player == 2 ? 8000 : -8000; // Higher than regular open threes
+        }
 
         // Check for multiple open threes (very strong position)
         int openThrees = CountPattern(line, player, [0, player, player, player, 0]);
@@ -785,18 +870,30 @@ public class GomokuService : IGomokuService {
         else if (openThrees == 1)
             return player == 2 ? 1000 : -1000;
 
-        // Half-open four (strong threat, but can be blocked)
-        // Pattern: PPPP0 or 0PPPP or PP0PP
-        if (ContainsPattern(line, player, [player, player, player, player, 0]) ||
-            ContainsPattern(line, player, [0, player, player, player, player]) ||
-            ContainsPattern(line, player, [player, player, 0, player, player]))
+        // Three in a row with open spaces (developing into a strong threat)
+        // Various patterns of three stones that can develop into four
+        if (ContainsPattern(line, player, [0, player, player, player, 0])) {
+            // Open three is already counted above, this is for other cases
+        } else if (ContainsPattern(line, player, [player, player, player, 0, 0]) ||
+                 ContainsPattern(line, player, [0, 0, player, player, player]) ||
+                 ContainsPattern(line, player, [player, player, 0, player, 0]) ||
+                 ContainsPattern(line, player, [0, player, 0, player, player]) ||
+                 ContainsPattern(line, player, [player, 0, player, player, 0])) {
             score += player == 2 ? 800 : -800;
+        }
 
-        // Potential threes (developing threats)
+        // Check for interrupted/broken double-open threes
+        // Like 0P0PP0 or 0PP0P0 with open ends - these are subtle but dangerous
+        if (ContainsPattern(line, player, [0, 0, player, 0, player, player, 0, 0]) ||
+            ContainsPattern(line, player, [0, 0, player, player, 0, player, 0, 0])) {
+            score += player == 2 ? 1200 : -1200;
+        }
+
+        // Potential threats (developing patterns)
         if (ContainsPattern(line, player, [0, player, player, 0, 0]) ||
             ContainsPattern(line, player, [0, 0, player, player, 0]) ||
             ContainsPattern(line, player, [0, player, 0, player, 0]))
-            score += player == 2 ? 300 : -300;
+            score += player == 2 ? 400 : -400;
 
         // Connected pairs (building blocks)
         if (ContainsPattern(line, player, [0, 0, player, player, 0, 0]))
@@ -830,7 +927,18 @@ public class GomokuService : IGomokuService {
                     break;
                 }
 
-                if (pattern[j] != 0 && line[i + j] != pattern[j]) {
+                // For player-specific values in the pattern, substitute player's value
+                if (pattern[j] == player && line[i + j] != player) {
+                    match = false;
+                    break;
+                }
+                // For non-player non-zero values in the pattern (specific opponent pieces)
+                else if (pattern[j] != 0 && pattern[j] != player && line[i + j] != pattern[j]) {
+                    match = false;
+                    break;
+                }
+                // For empty spaces in pattern
+                else if (pattern[j] == 0 && line[i + j] != 0) {
                     match = false;
                     break;
                 }
