@@ -55,54 +55,190 @@ public class GomokuService : IGomokuService {
     private const int MIN_SCORE = -1000000;
 
     /// <summary>
-    /// Uses minimax algorithm to determine the best move for the AI player
+    /// Default time limit for AI move calculation in milliseconds
+    /// </summary>
+    private const int DEFAULT_TIME_LIMIT_MS = 3000; // 3 seconds default
+
+    /// <summary>
+    /// Dictionary to store position evaluations for caching
+    /// </summary>
+    private readonly Dictionary<string, TranspositionEntry> _positionCache = new(10000);
+
+    /// <summary>
+    /// Entry in the position evaluation cache
+    /// </summary>
+    private class TranspositionEntry {
+        public int Score { get; set; }
+        public int Depth { get; set; }
+        public MoveModel? BestMove { get; set; }
+        public TranspositionEntryType Type { get; set; }
+    }
+
+    /// <summary>
+    /// Type of score stored in the transposition table
+    /// </summary>
+    private enum TranspositionEntryType {
+        Exact,      // Exact evaluation score
+        LowerBound, // A lower bound on the score
+        UpperBound  // An upper bound on the score
+    }
+
+    /// <summary>
+    /// Uses iterative deepening minimax algorithm to determine the best move for the AI player
+    /// with time management and position caching for improved performance
     /// </summary>
     /// <param name="gameState">Current state of the game board</param>
     /// <returns>The best move for the current player</returns>
     public MoveModel GetBestMove(GameStateModel gameState) {
-        // Determine search depth based on difficulty
-        int depth = (int)gameState.Difficulty;
-        int bestScore = MIN_SCORE;
-        MoveModel? bestMove = null;
-
-        // Reduce depth in early game to improve performance
-        int numberOfPieces = gameState.Board.Cast<int>().Count(cell => cell != 0);
-        // Adjust depth based on game stage
-        if (numberOfPieces < 5) {
-            // Early game - reduce depth
-            depth = Math.Min(depth, 2);
-        }
-
-        // Get all valid moves within 2 spaces of existing pieces
-        List<MoveModel> validMoves = GetNearbyEmptySpaces(gameState);
-
-        foreach (var move in validMoves) {
-            var newState = MakeMove(gameState, move, 2); // AI is making this move (player 2)
-            var score = Minimax(newState, depth - 1, MIN_SCORE, MAX_SCORE, false);
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestMove = move;
+        // Instead of clearing the entire cache, only limit its size if it grows too large
+        if (_positionCache.Count > 100000) {
+            // Keep only a subset of most valuable entries (deeper searches)
+            var valuableEntries = _positionCache
+                .OrderByDescending(entry => entry.Value.Depth)
+                .Take(10000)
+                .ToDictionary(pair => pair.Key, pair => pair.Value);
+            _positionCache.Clear();
+            foreach (var entry in valuableEntries) {
+                _positionCache[entry.Key] = entry.Value;
             }
         }
 
-        // If no best move was found or there are no valid moves, return center or first available move
-        return bestMove ?? validMoves.FirstOrDefault() ?? new MoveModel {
+        // Set up time management
+        DateTime startTime = DateTime.Now;
+        int timeLimit = gameState.Difficulty switch {
+            Utilities.Difficulty.Easy => DEFAULT_TIME_LIMIT_MS / 3,// 1 second for easy
+            Utilities.Difficulty.Hard => DEFAULT_TIME_LIMIT_MS * 2,// 6 seconds for hard
+            Utilities.Difficulty.Expert => DEFAULT_TIME_LIMIT_MS * 3,// 9 seconds for expert
+            _ => DEFAULT_TIME_LIMIT_MS,// 3 seconds for medium
+        };
+
+        // Determine maximum search depth based on difficulty
+        int maxDepth = (int)gameState.Difficulty + 1;
+
+        // Adjust depth based on game stage
+        int numberOfPieces = gameState.Board.Cast<int>().Count(cell => cell != 0);
+        if (numberOfPieces < 5) {
+            // Early game - reduce max depth
+            maxDepth = Math.Min(maxDepth, 3);
+        } else if (numberOfPieces > GameConstants.BOARD_SIZE * GameConstants.BOARD_SIZE - 10) {
+            // End game - can search deeper since fewer positions
+            maxDepth++;
+        }
+
+        // Get all valid moves within proximity to existing pieces
+        List<MoveModel> validMoves = GetNearbyEmptySpaces(gameState);
+
+        // Early return for trivial cases
+        if (validMoves.Count == 0) {
+            return new MoveModel {
+                Row = GameConstants.BOARD_SIZE / 2,
+                Col = GameConstants.BOARD_SIZE / 2
+            };
+        }
+
+        if (validMoves.Count == 1) {
+            return validMoves[0];
+        }
+
+        // First check for immediate winning moves
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeMove(gameState, move, 2);
+            if (CheckWin(newState, move)) {
+                return move; // Found a winning move
+            }
+        }
+
+        // Then check for immediate blocking moves
+        foreach (MoveModel move in validMoves) {
+            GameStateModel tempState = MakeMove(gameState, move, 1);
+            if (CheckWin(tempState, move)) {
+                return move; // Found a blocking move
+            }
+        }
+
+        // Start with a default move (center or first valid move)
+        MoveModel? bestMove = validMoves.FirstOrDefault(m =>
+            m.Row == GameConstants.BOARD_SIZE / 2 && m.Col == GameConstants.BOARD_SIZE / 2) ?? validMoves.FirstOrDefault();
+
+        // Iterative deepening - start from depth 1 and increase gradually
+        for (int currentDepth = 1; currentDepth <= maxDepth; currentDepth++) {
+            int bestScore = MIN_SCORE;
+            MoveModel? currentBestMove = null;
+
+            // Check if we're running out of time before starting a new depth
+            if ((DateTime.Now - startTime).TotalMilliseconds > timeLimit * 0.7) {
+                break; // Stop if we've used 70% of our time budget
+            }
+
+            // Search at current depth
+            foreach (var move in validMoves) {
+                // Check if we're running out of time
+                if ((DateTime.Now - startTime).TotalMilliseconds > timeLimit * 0.9) {
+                    break; // Stop if we've used 90% of our time budget
+                }
+
+                GameStateModel newState = MakeMove(gameState, move, 2); // AI making this move
+                int score = Minimax(newState, currentDepth - 1, MIN_SCORE, MAX_SCORE, false, startTime, timeLimit);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    currentBestMove = move;
+
+                    // If we found a winning move, no need to search further
+                    if (score >= MAX_SCORE - 100) {
+                        bestMove = currentBestMove;
+                        return bestMove; // Return winning move immediately
+                    }
+                }
+            }
+
+            // Update best move if we completed this iteration
+            if (currentBestMove != null) {
+                bestMove = currentBestMove;
+            }
+        }
+
+        return bestMove ?? new MoveModel {
             Row = GameConstants.BOARD_SIZE / 2,
             Col = GameConstants.BOARD_SIZE / 2
         };
     }
 
     /// <summary>
-    /// Implements the minimax algorithm with alpha-beta pruning and optimized move ordering
+    /// Implements the minimax algorithm with alpha-beta pruning, position caching and time management
     /// </summary>
     /// <param name="state">Current game state to evaluate</param>
     /// <param name="depth">Remaining search depth</param>
     /// <param name="alpha">Alpha value for pruning</param>
     /// <param name="beta">Beta value for pruning</param>
     /// <param name="isMaximizing">Whether this is a maximizing turn (AI) or minimizing turn (opponent)</param>
+    /// <param name="startTime">Start time of the search (for time management)</param>
+    /// <param name="timeLimit">Time limit in milliseconds</param>
     /// <returns>The evaluation score for the current state</returns>
-    private int Minimax(GameStateModel state, int depth, int alpha, int beta, bool isMaximizing) {
+    private int Minimax(GameStateModel state, int depth, int alpha, int beta, bool isMaximizing,
+                       DateTime? startTime = null, int timeLimit = DEFAULT_TIME_LIMIT_MS) {
+        // Check if we're running out of time
+        if (startTime.HasValue && (DateTime.Now - startTime.Value).TotalMilliseconds > timeLimit * 0.95) {
+            return isMaximizing ? alpha : beta; // Return current bound if out of time
+        }
+
+        // Generate position hash for cache lookup
+        string positionHash = GeneratePositionHash(state);
+
+        // Check if this position is in the cache
+        if (_positionCache.TryGetValue(positionHash, out var cachedEntry) && cachedEntry.Depth >= depth) {
+            switch (cachedEntry.Type) {
+                case TranspositionEntryType.Exact:
+                    return cachedEntry.Score;
+                case TranspositionEntryType.LowerBound:
+                    if (cachedEntry.Score >= beta) return cachedEntry.Score;
+                    break;
+                case TranspositionEntryType.UpperBound:
+                    if (cachedEntry.Score <= alpha) return cachedEntry.Score;
+                    break;
+            }
+        }
+
         // Terminal conditions
         if (depth == 0) return EvaluateBoard(state);
 
@@ -117,35 +253,91 @@ public class GomokuService : IGomokuService {
         // Evaluate immediately critical moves first to improve pruning
         validMoves = PrioritizeCriticalMoves(state, validMoves, isMaximizing);
 
+        int originalAlpha = alpha;
+        int bestScore;
+
         if (isMaximizing) {
-            var maxScore = MIN_SCORE;
+            bestScore = MIN_SCORE;
             foreach (var move in validMoves) {
+                // Check if we're running out of time periodically
+                if (startTime.HasValue && validMoves.Count > 5 &&
+                   (DateTime.Now - startTime.Value).TotalMilliseconds > timeLimit * 0.9) {
+                    break;
+                }
+
                 var newState = MakeMove(state, move, 2); // Player 2 (AI) is maximizing
-                var score = Minimax(newState, depth - 1, alpha, beta, false);
+                var score = Minimax(newState, depth - 1, alpha, beta, false, startTime, timeLimit);
 
                 // If this move wins, no need to search further
-                if (score >= MAX_SCORE - 10) return score - 1; // Slight adjustment for depth
+                if (score >= MAX_SCORE - 10) {
+                    bestScore = score - 1;
+                    break;
+                }
 
-                maxScore = Math.Max(maxScore, score);
+                bestScore = Math.Max(bestScore, score);
                 alpha = Math.Max(alpha, score);
                 if (beta <= alpha) break; // Alpha-beta pruning
             }
-            return maxScore;
         } else {
-            var minScore = MAX_SCORE;
+            bestScore = MAX_SCORE;
             foreach (var move in validMoves) {
+                // Check if we're running out of time periodically
+                if (startTime.HasValue && validMoves.Count > 5 &&
+                   (DateTime.Now - startTime.Value).TotalMilliseconds > timeLimit * 0.9) {
+                    break;
+                }
+
                 var newState = MakeMove(state, move, 1); // Player 1 (Human) is minimizing
-                var score = Minimax(newState, depth - 1, alpha, beta, true);
+                var score = Minimax(newState, depth - 1, alpha, beta, true, startTime, timeLimit);
 
                 // If this move wins for human, no need to search further
-                if (score <= MIN_SCORE + 10) return score + 1; // Slight adjustment for depth
+                if (score <= MIN_SCORE + 10) {
+                    bestScore = score + 1;
+                    break;
+                }
 
-                minScore = Math.Min(minScore, score);
+                bestScore = Math.Min(bestScore, score);
                 beta = Math.Min(beta, score);
                 if (beta <= alpha) break; // Alpha-beta pruning
             }
-            return minScore;
         }
+
+        // Store position in cache
+        TranspositionEntryType entryType;
+        if (bestScore <= originalAlpha) {
+            entryType = TranspositionEntryType.UpperBound;
+        } else if (bestScore >= beta) {
+            entryType = TranspositionEntryType.LowerBound;
+        } else {
+            entryType = TranspositionEntryType.Exact;
+        }
+
+        // Only store if we have a valid score (not interrupted by time limit)
+        if (!startTime.HasValue || (DateTime.Now - startTime.Value).TotalMilliseconds <= timeLimit * 0.95) {
+            _positionCache[positionHash] = new TranspositionEntry {
+                Score = bestScore,
+                Depth = depth,
+                Type = entryType
+            };
+        }
+
+        return bestScore;
+    }
+
+    /// <summary>
+    /// Generates a hash string for the current board position
+    /// </summary>
+    /// <param name="state">Current game state</param>
+    /// <returns>String hash of the board position</returns>
+    private static string GeneratePositionHash(GameStateModel state) {
+        // Simple hash implementation - concatenate all board positions
+        var hash = new System.Text.StringBuilder();
+        for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
+            for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
+                hash.Append(state.Board[i, j]);
+            }
+        }
+        return hash.ToString();
     }
 
     /// <summary>
