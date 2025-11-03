@@ -45,21 +45,6 @@ public interface IGomokuService {
 /// </summary>
 public class GomokuService : IGomokuService {
     /// <summary>
-    /// Maximum possible evaluation score for a winning position
-    /// </summary>
-    private const int MAX_SCORE = 1000000;
-
-    /// <summary>
-    /// Minimum possible evaluation score for a losing position
-    /// </summary>
-    private const int MIN_SCORE = -1000000;
-
-    /// <summary>
-    /// Default time limit for AI move calculation in milliseconds
-    /// </summary>
-    private const int DEFAULT_TIME_LIMIT_MS = 4000; // 3 seconds default
-
-    /// <summary>
     /// Dictionary to store position evaluations for caching
     /// </summary>
     private readonly Dictionary<string, TranspositionEntry> _positionCache = new(10000);
@@ -110,29 +95,17 @@ public class GomokuService : IGomokuService {
         // Set up time management
         DateTime startTime = DateTime.Now;
         int timeLimit = gameState.Difficulty switch {
-            Utilities.Difficulty.Easy => DEFAULT_TIME_LIMIT_MS / 3,// 1 second for easy
-            Utilities.Difficulty.Hard => DEFAULT_TIME_LIMIT_MS * 2,// 8 seconds for hard
-            Utilities.Difficulty.Expert => DEFAULT_TIME_LIMIT_MS * 3,// 12 seconds for expert
-            _ => DEFAULT_TIME_LIMIT_MS,// 4 seconds for medium
+            Utilities.Difficulty.Easy => GameConstants.DEFAULT_TIME_LIMIT_MS / 3,// 1 second for easy
+            Utilities.Difficulty.Hard => GameConstants.DEFAULT_TIME_LIMIT_MS * 2,// 8 seconds for hard
+            Utilities.Difficulty.Expert => GameConstants.DEFAULT_TIME_LIMIT_MS * 3,// 12 seconds for expert
+            _ => GameConstants.DEFAULT_TIME_LIMIT_MS,// 4 seconds for medium
         };
-
-        // Determine maximum search depth based on difficulty
-        int maxDepth = (int)gameState.Difficulty + 1;
-
-        // Adjust depth based on game stage
-        int numberOfPieces = gameState.Board.Cast<int>().Count(cell => cell != 0);
-        if (numberOfPieces < 4) {
-            // Early game - reduce max depth
-            maxDepth = Math.Min(maxDepth, 2);
-        } else if (numberOfPieces > GameConstants.BOARD_SIZE * GameConstants.BOARD_SIZE - 10) {
-            // End game - can search deeper since fewer positions
-            maxDepth++;
-        }
 
         // Get all valid moves within proximity to existing pieces
         List<MoveModel> validMoves = GetNearbyEmptySpaces(gameState);
 
         // Early return for trivial cases
+        // No valid moves left - should be a draw. Place in center as fallback
         if (validMoves.Count == 0) {
             return new MoveModel {
                 Row = GameConstants.BOARD_SIZE / 2,
@@ -140,11 +113,13 @@ public class GomokuService : IGomokuService {
             };
         }
 
+        // Only one valid move left
         if (validMoves.Count == 1) {
             return validMoves[0];
         }
 
         // First move considerations - prefer center and near-center positions for better board control
+        // Only applies if the board is mostly empty (first 2 moves)
         if (gameState.Board.Cast<int>().Count(cell => cell != 0) <= 2) {
             int center = GameConstants.BOARD_SIZE / 2;
             // If center is available, take it
@@ -159,14 +134,6 @@ public class GomokuService : IGomokuService {
             }
         }
 
-        // First check for immediate winning moves
-        foreach (MoveModel move in validMoves) {
-            GameStateModel newState = MakeMove(gameState, move, 2);
-            if (CheckWin(newState, move)) {
-                return move; // Found a winning move
-            }
-        }
-
         // Then check for immediate blocking moves
         foreach (MoveModel move in validMoves) {
             GameStateModel tempState = MakeMove(gameState, move, 1);
@@ -175,54 +142,61 @@ public class GomokuService : IGomokuService {
             }
         }
 
+        // First check for immediate winning moves
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeMove(gameState, move, 2);
+            if (CheckWin(newState, move)) {
+                return move; // Found a winning move
+            }
+        }
+
         // Start with a default move (center or first valid move)
         MoveModel? bestMove = validMoves.FirstOrDefault(m =>
             m.Row == GameConstants.BOARD_SIZE / 2 && m.Col == GameConstants.BOARD_SIZE / 2) ?? validMoves.FirstOrDefault();
 
-        // Iterative deepening - start from depth 1 and increase gradually
-        for (int currentDepth = 1; currentDepth <= maxDepth; currentDepth++) {
-            int bestScore = MIN_SCORE;
-            MoveModel? currentBestMove = null;
+        int bestScore = GameConstants.MIN_SCORE;
+        MoveModel? currentBestMove = null;
+        int searchDepth = gameState.Difficulty switch {
+            Utilities.Difficulty.Easy => 2,
+            Utilities.Difficulty.Hard => 4,
+            Utilities.Difficulty.Expert => 6,
+            _ => 3, // Medium
+        };
 
-            // Check if we're running out of time before starting a new depth
-            if ((DateTime.Now - startTime).TotalMilliseconds > timeLimit * 0.7) {
-                break; // Stop if we've used 70% of our time budget
+        // Search at current depth
+        foreach (var move in validMoves) {
+            // Check if we're running out of time
+            if ((DateTime.Now - startTime).TotalMilliseconds > timeLimit * 0.9) {
+                break; // Stop if we've used 90% of our time budget
             }
 
-            // Search at current depth
-            foreach (var move in validMoves) {
-                // Check if we're running out of time
-                if ((DateTime.Now - startTime).TotalMilliseconds > timeLimit * 0.9) {
-                    break; // Stop if we've used 90% of our time budget
-                }
-
-                GameStateModel newState = MakeMove(gameState, move, 2); // AI making this move
-                // Check move cache first to avoid redundant calculations within this search
-                string stateKey = GeneratePositionHash(newState);
-                int score;
-                if (moveCache.TryGetValue(stateKey, out int cachedScore)) {
-                    score = cachedScore;
-                } else {
-                    score = Minimax(newState, currentDepth - 1, MIN_SCORE, MAX_SCORE, false, startTime, timeLimit);
-                    moveCache[stateKey] = score; // Cache the evaluation
-                }
-
-                if (score > bestScore) {
-                    bestScore = score;
-                    currentBestMove = move;
-
-                    // If we found a winning move, no need to search further
-                    if (score >= MAX_SCORE - 100) {
-                        bestMove = currentBestMove;
-                        return bestMove; // Return winning move immediately
-                    }
-                }
+            GameStateModel newState = MakeMove(gameState, move, 2); // AI making this move
+                                                                    // Check move cache first to avoid redundant calculations within this search
+                                                                    // For the current move evaluation, we know it will be player 1's turn next (false)
+            string stateKey = GeneratePositionHash(newState, false);
+            int score;
+            if (moveCache.TryGetValue(stateKey, out int cachedScore)) {
+                score = cachedScore;
+            } else {
+                score = Minimax(newState, searchDepth - 1, GameConstants.MIN_SCORE, GameConstants.MAX_SCORE, false, startTime, timeLimit);
+                moveCache[stateKey] = score; // Cache the evaluation
             }
 
-            // Update best move if we completed this iteration
-            if (currentBestMove != null) {
-                bestMove = currentBestMove;
+            if (score > bestScore) {
+                bestScore = score;
+                currentBestMove = move;
+
+                // If we found a winning move, no need to search further
+                if (score >= GameConstants.MAX_SCORE - 100) {
+                    bestMove = currentBestMove;
+                    return bestMove; // Return winning move immediately
+                }
             }
+        }
+
+        // Update best move if we completed this iteration
+        if (currentBestMove != null) {
+            bestMove = currentBestMove;
         }
 
         return bestMove ?? new MoveModel {
@@ -243,14 +217,14 @@ public class GomokuService : IGomokuService {
     /// <param name="timeLimit">Time limit in milliseconds</param>
     /// <returns>The evaluation score for the current state</returns>
     private int Minimax(GameStateModel state, int depth, int alpha, int beta, bool isMaximizing,
-                       DateTime? startTime = null, int timeLimit = DEFAULT_TIME_LIMIT_MS) {
+                       DateTime? startTime = null, int timeLimit = GameConstants.DEFAULT_TIME_LIMIT_MS) {
         // Check if we're running out of time
         if (startTime.HasValue && (DateTime.Now - startTime.Value).TotalMilliseconds > timeLimit * 0.95) {
             return isMaximizing ? alpha : beta; // Return current bound if out of time
         }
 
-        // Generate position hash for cache lookup
-        string positionHash = GeneratePositionHash(state);
+        // Generate position hash for cache lookup - include the player information
+        string positionHash = GeneratePositionHash(state, isMaximizing);
 
         // Check if this position is in the cache
         if (_positionCache.TryGetValue(positionHash, out var cachedEntry) && cachedEntry.Depth >= depth) {
@@ -271,8 +245,17 @@ public class GomokuService : IGomokuService {
 
         // Check for win/loss conditions to prioritize immediate threats
         var (aiWinningMove, humanWinningMove) = DetectImmediateThreats(state);
-        if (aiWinningMove) return MAX_SCORE - (5 - depth); // Prefer quicker wins
-        if (humanWinningMove) return MIN_SCORE + (5 - depth); // Prefer blocking immediate threats
+        if (aiWinningMove) return GameConstants.MAX_SCORE - (5 - depth); // Prefer quicker wins
+        if (humanWinningMove) return GameConstants.MIN_SCORE + (5 - depth); // Prefer blocking immediate threats
+
+        // If we're at depth 1, scan more carefully for critical threats
+        // This helps catch patterns that might be missed by normal evaluation
+        if (depth == 1) {
+            int criticalThreatScore = DetectCriticalThreats(state, isMaximizing);
+            if (criticalThreatScore != 0) {
+                return criticalThreatScore;
+            }
+        }
 
         var validMoves = GetNearbyEmptySpaces(state);
         if (validMoves.Count == 0) return 0;
@@ -284,7 +267,7 @@ public class GomokuService : IGomokuService {
         int bestScore;
 
         if (isMaximizing) {
-            bestScore = MIN_SCORE;
+            bestScore = GameConstants.MIN_SCORE;
             foreach (var move in validMoves) {
                 // Check if we're running out of time periodically
                 if (startTime.HasValue && validMoves.Count > 5 &&
@@ -296,7 +279,7 @@ public class GomokuService : IGomokuService {
                 var score = Minimax(newState, depth - 1, alpha, beta, false, startTime, timeLimit);
 
                 // If this move wins, no need to search further
-                if (score >= MAX_SCORE - 10) {
+                if (score >= GameConstants.MAX_SCORE - 10) {
                     bestScore = score - 1;
                     break;
                 }
@@ -306,7 +289,7 @@ public class GomokuService : IGomokuService {
                 if (beta <= alpha) break; // Alpha-beta pruning
             }
         } else {
-            bestScore = MAX_SCORE;
+            bestScore = GameConstants.MAX_SCORE;
             foreach (var move in validMoves) {
                 // Check if we're running out of time periodically
                 if (startTime.HasValue && validMoves.Count > 5 &&
@@ -318,7 +301,7 @@ public class GomokuService : IGomokuService {
                 var score = Minimax(newState, depth - 1, alpha, beta, true, startTime, timeLimit);
 
                 // If this move wins for human, no need to search further
-                if (score <= MIN_SCORE + 10) {
+                if (score <= GameConstants.MIN_SCORE + 10) {
                     bestScore = score + 1;
                     break;
                 }
@@ -341,6 +324,7 @@ public class GomokuService : IGomokuService {
 
         // Only store if we have a valid score (not interrupted by time limit)
         if (!startTime.HasValue || (DateTime.Now - startTime.Value).TotalMilliseconds <= timeLimit * 0.95) {
+            // Store with the player information in the hash
             _positionCache[positionHash] = new TranspositionEntry {
                 Score = bestScore,
                 Depth = depth,
@@ -356,14 +340,24 @@ public class GomokuService : IGomokuService {
     /// </summary>
     /// <param name="state">Current game state</param>
     /// <returns>String hash of the board position</returns>
-    private static string GeneratePositionHash(GameStateModel state) {
-        // Simple hash implementation - concatenate all board positions
+    private static string GeneratePositionHash(GameStateModel state, bool? isMaximizingPlayer = null) {
+        // Enhanced hash implementation that includes whose turn it is
+        // This ensures we don't confuse positions based on whose turn it is
         var hash = new System.Text.StringBuilder();
+
+        // Add board state
         for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
             for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
                 hash.Append(state.Board[i, j]);
             }
         }
+
+        // If the maximizing player indicator is provided, include it in the hash
+        // This is crucial because the same board position has different values depending on whose turn it is
+        if (isMaximizingPlayer.HasValue) {
+            hash.Append(isMaximizingPlayer.Value ? "A" : "H"); // A for AI, H for Human
+        }
+
         return hash.ToString();
     }
 
@@ -538,8 +532,8 @@ public class GomokuService : IGomokuService {
     private int EvaluateBoard(GameStateModel state) {
         // First check for immediate winning and blocking moves
         var (aiWinningMove, humanWinningMove) = DetectImmediateThreats(state);
-        if (aiWinningMove) return MAX_SCORE;
-        if (humanWinningMove) return MIN_SCORE;
+        if (aiWinningMove) return GameConstants.MAX_SCORE;
+        if (humanWinningMove) return GameConstants.MIN_SCORE;
 
         int score = 0;
 
@@ -677,6 +671,129 @@ public class GomokuService : IGomokuService {
         }
 
         return (aiWinningMove, humanWinningMove);
+    }
+
+    /// <summary>
+    /// Scans the board for critical threat patterns that might be missed in normal evaluation
+    /// This is especially important for detecting opponent's developing threats
+    /// </summary>
+    /// <param name="state">Current game state</param>
+    /// <param name="isMaximizing">Whether it's the maximizing player's turn (AI)</param>
+    /// <returns>Score adjustment for critical threats</returns>
+    private static int DetectCriticalThreats(GameStateModel state, bool isMaximizing) {
+        // Check for double-end fours for both players
+        bool foundAiDoubleEndFour = false;
+        bool foundHumanDoubleEndFour = false;
+
+        // Check for multiple open threes
+        int aiOpenThrees = 0;
+        int humanOpenThrees = 0;
+
+        // Rather than scanning all possible lines, look specifically for critical moves
+        // This is more efficient and focuses on real threats
+        for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
+            for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
+                if (state.Board[i, j] != 0) {
+                    // Check in all 4 directions around each stone
+                    int[][] directions = [
+                        [1, 0],   // vertical
+                        [0, 1],   // horizontal
+                        [1, 1],   // diagonal
+                        [1, -1]   // anti-diagonal
+                    ];
+
+                    foreach (var dir in directions) {
+                        // Get line of 9 positions centered on current position
+                        int[] line = GetLineAt(state, i, j, dir[0], dir[1]);
+
+                        // Check for threats in this line
+                        if (line != null) {
+                            CheckLineForThreats(line, ref foundAiDoubleEndFour, ref foundHumanDoubleEndFour,
+                                                ref aiOpenThrees, ref humanOpenThrees);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Determine critical score
+        if (foundHumanDoubleEndFour && !isMaximizing) {
+            // Human has a double-end four on their turn - critical win chance for human
+            // Return a very negative score since this is catastrophic for AI
+            return GameConstants.MIN_SCORE + 50; // Very bad for AI (almost as bad as losing)
+        } else if (foundHumanDoubleEndFour && isMaximizing) {
+            // AI needs to block human's double-end four - highest priority
+            // Still a very negative score to ensure AI prioritizes blocking this
+            return GameConstants.MIN_SCORE + 150; // Critical blocking move
+        } else if (foundAiDoubleEndFour && isMaximizing) {
+            // AI has a double-end four on their turn - critical win chance for AI
+            // Return a very positive score since this is a near-win for AI
+            return GameConstants.MAX_SCORE - 50; // Very good for AI (almost as good as winning)
+        } else if (foundAiDoubleEndFour && !isMaximizing) {
+            // Human needs to block AI's double-end four
+            // Still a very positive score since human must block this
+            return GameConstants.MAX_SCORE - 150; // Critical blocking move for human
+        } else if (humanOpenThrees >= 2 && !isMaximizing) {
+            // Human has multiple open threes on their turn - very strong position for human
+            return GameConstants.MIN_SCORE + 300; // Bad for AI but not as critical as double-end four
+        } else if (aiOpenThrees >= 2 && isMaximizing) {
+            // AI has multiple open threes on their turn - very strong position for AI
+            return GameConstants.MAX_SCORE - 300; // Good for AI but not as critical as double-end four
+        }
+
+        // No critical threats found
+        return 0;
+    }
+
+    /// <summary>
+    /// Gets a line of cells in a specific direction from a given position
+    /// </summary>
+    private static int[] GetLineAt(GameStateModel state, int row, int col, int drow, int dcol) {
+        // Create an array to hold 9 cells (4 on each side + center)
+        int[] line = new int[9];
+
+        for (int i = -4; i <= 4; i++) {
+            int newRow = row + i * drow;
+            int newCol = col + i * dcol;
+
+            // Default to -1 for out of bounds
+            int value = -1;
+
+            if (newRow >= 0 && newRow < GameConstants.BOARD_SIZE &&
+                newCol >= 0 && newCol < GameConstants.BOARD_SIZE) {
+                value = state.Board[newRow, newCol];
+            }
+
+            line[i + 4] = value;
+        }
+
+        return line;
+    }
+
+    /// <summary>
+    /// Checks a line for critical threat patterns
+    /// </summary>
+    private static void CheckLineForThreats(int[] line, ref bool foundAiDoubleEndFour, ref bool foundHumanDoubleEndFour,
+                                          ref int aiOpenThrees, ref int humanOpenThrees) {
+        // Check for double-end four pattern for AI (Player 2)
+        if (ContainsPattern(line, 2, [0, 2, 2, 2, 2, 0])) {
+            foundAiDoubleEndFour = true;
+        }
+
+        // Check for double-end four pattern for Human (Player 1)
+        if (ContainsPattern(line, 1, [0, 1, 1, 1, 1, 0])) {
+            foundHumanDoubleEndFour = true;
+        }
+
+        // Check for open three patterns for AI
+        if (ContainsPattern(line, 2, [0, 0, 2, 2, 2, 0, 0])) {
+            aiOpenThrees++;
+        }
+
+        // Check for open three patterns for Human
+        if (ContainsPattern(line, 1, [0, 0, 1, 1, 1, 0, 0])) {
+            humanOpenThrees++;
+        }
     }
 
     /// <summary>
@@ -841,7 +958,7 @@ public class GomokuService : IGomokuService {
 
         // Check for winning pattern (five or more in a row)
         if (ContainsConsecutive(line, player, 5))
-            return player == 2 ? MAX_SCORE : MIN_SCORE;
+            return player == 2 ? GameConstants.MAX_SCORE : GameConstants.MIN_SCORE;
 
         // Check for four in a row (immediate winning threat)
         // These would end the game on the next move

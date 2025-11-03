@@ -24,6 +24,7 @@ builder.Services.AddScoped<IGomokuService, GomokuService>();
 
 var app = builder.Build();
 
+// Middleware pipeline configuration
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment()) {
     app.UseSwagger();
