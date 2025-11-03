@@ -26,3 +26,12 @@ dist-ssr
 # .NET build outputs
 bin/
 obj/
+
+# Backup files
+*.backup
+*.bak
+*.orig
+*.tmp
+*~
+.#*
+#*#
