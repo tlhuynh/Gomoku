@@ -87,12 +87,25 @@ public class GomokuService(IPositionCacheService cacheService) : IGomokuService 
     }
 
     /// <summary>
-    /// Finds best move using minimax algorithm
+    /// Finds best move using minimax algorithm with parallel evaluation
     /// </summary>
     private MoveModel FindBestMoveUsingMinimax(GameStateModel gameState, List<MoveModel> validMoves) {
-        Dictionary<string, int> moveCache = [];
         int searchDepth = GetSearchDepth(gameState.Difficulty);
 
+        // For small move sets, use sequential processing to avoid threading overhead
+        if (validMoves.Count <= 4) {
+            return FindBestMoveSequential(gameState, validMoves, searchDepth);
+        }
+
+        // Use parallel processing for larger move sets
+        return FindBestMoveParallel(gameState, validMoves, searchDepth);
+    }
+
+    /// <summary>
+    /// Sequential move evaluation for small move sets
+    /// </summary>
+    private MoveModel FindBestMoveSequential(GameStateModel gameState, List<MoveModel> validMoves, int searchDepth) {
+        Dictionary<string, int> moveCache = [];
         int bestScore = GameConstants.MIN_SCORE;
         MoveModel? bestMove = null;
 
@@ -119,10 +132,59 @@ public class GomokuService(IPositionCacheService cacheService) : IGomokuService 
             }
         }
 
-        return bestMove ?? new MoveModel {
-            Row = GameConstants.BOARD_SIZE / 2,
-            Col = GameConstants.BOARD_SIZE / 2
+        return bestMove ?? validMoves[0];
+    }
+
+    /// <summary>
+    /// Parallel move evaluation for larger move sets
+    /// </summary>
+    private MoveModel FindBestMoveParallel(GameStateModel gameState, List<MoveModel> validMoves, int searchDepth) {
+        object lockObject = new();
+        int bestScore = GameConstants.MIN_SCORE;
+        MoveModel? bestMove = null;
+        bool earlyTermination = false;
+
+        // Use parallel processing with degree of parallelism based on CPU cores
+        ParallelOptions parallelOptions = new() {
+            MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, validMoves.Count)
         };
+
+        Parallel.ForEach(validMoves, parallelOptions, (move, loopState) => {
+            // Check for early termination
+            if (earlyTermination) {
+                loopState.Stop();
+                return;
+            }
+
+            GameStateModel newState = MakeMove(gameState, move, (int)Player.AI);
+            string stateKey = _cacheService.GeneratePositionHash(newState, false);
+
+            // Check cache first (cache service is now thread-safe)
+            int? cachedScore = _cacheService.GetCachedScore(stateKey, searchDepth - 1,
+                GameConstants.MIN_SCORE, GameConstants.MAX_SCORE);
+
+            int score;
+            if (cachedScore.HasValue) {
+                score = cachedScore.Value;
+            } else {
+                score = Minimax(newState, searchDepth - 1, GameConstants.MIN_SCORE, GameConstants.MAX_SCORE, false);
+            }
+
+            lock (lockObject) {
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = move;
+
+                    // Early termination for winning moves
+                    if (score >= GameConstants.MAX_SCORE - 100) {
+                        earlyTermination = true;
+                        loopState.Stop();
+                    }
+                }
+            }
+        });
+
+        return bestMove ?? validMoves[0];
     }
 
     /// <summary>

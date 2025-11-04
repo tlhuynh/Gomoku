@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using GomokuApi.Constants;
 using GomokuApi.Models;
 using GomokuApi.Services.Helpers;
@@ -6,10 +7,10 @@ using GomokuApi.Utilities.Cache;
 namespace GomokuApi.Services;
 
 /// <summary>
-/// Service for managing position evaluation cache in the minimax algorithm
+/// Thread-safe service for managing position evaluation cache in the minimax algorithm
 /// </summary>
 public class PositionCacheService : IPositionCacheService {
-    private readonly Dictionary<string, TranspositionEntry> _positionCache = new(GameConstants.CacheSettings.MAX_CACHE_SIZE);
+    private readonly ConcurrentDictionary<string, TranspositionEntry> _positionCache = new();
 
     /// <summary>
     /// Attempts to retrieve a cached position evaluation
@@ -59,21 +60,31 @@ public class PositionCacheService : IPositionCacheService {
     }
 
     /// <summary>
-    /// Cleans cache when it gets too large. Keeps the most valuable entries based on depth.
+    /// Thread-safe cache cleanup when it gets too large. Keeps the most valuable entries based on depth.
     /// </summary>
     public void CleanCacheIfNeeded() {
         if (_positionCache.Count <= GameConstants.CacheSettings.MAX_CACHE_SIZE) {
             return;
         }
 
-        Dictionary<string, TranspositionEntry> valuableEntries = _positionCache
+        // Take a snapshot for analysis
+        var snapshot = _positionCache.ToArray();
+
+        // Find entries to keep (highest depth values)
+        var entriesToKeep = snapshot
             .OrderByDescending(entry => entry.Value.Depth)
             .Take(GameConstants.CacheSettings.REDUCED_CACHE_SIZE)
-            .ToDictionary(pair => pair.Key, pair => pair.Value);
+            .Select(entry => entry.Key)
+            .ToHashSet();
 
-        _positionCache.Clear();
-        foreach (KeyValuePair<string, TranspositionEntry> entry in valuableEntries) {
-            _positionCache[entry.Key] = entry.Value;
+        // Remove entries not in the keep set
+        var keysToRemove = snapshot
+            .Where(entry => !entriesToKeep.Contains(entry.Key))
+            .Select(entry => entry.Key)
+            .ToList();
+
+        foreach (string key in keysToRemove) {
+            _positionCache.TryRemove(key, out _);
         }
     }
 
