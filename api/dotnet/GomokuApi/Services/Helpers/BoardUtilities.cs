@@ -115,7 +115,7 @@ public static class BoardUtilities {
     /// <param name="state">Game state</param>
     /// <returns>List of nearby valid moves</returns>
     public static List<MoveModel> GetNearbyEmptySpaces(GameStateModel state) {
-        var moves = new List<MoveModel>();
+        List<MoveModel> moves = [];
 
         if (state.Board.Cast<int>().All(cell => cell == 0)) {
             return [new MoveModel {
@@ -132,6 +132,6 @@ public static class BoardUtilities {
             }
         }
 
-        return moves.OrderByDescending(m => QuickEvaluate(state, m)).ToList();
+        return [.. moves.OrderByDescending(m => QuickEvaluate(state, m))];
     }
 }

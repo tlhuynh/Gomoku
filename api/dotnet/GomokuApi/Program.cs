@@ -19,7 +19,8 @@ builder.Services.AddCors(options => {
         });
 });
 
-// Register Gomoku service
+// Register services
+builder.Services.AddScoped<IPositionCacheService, PositionCacheService>();
 builder.Services.AddScoped<IGomokuService, GomokuService>();
 
 var app = builder.Build();

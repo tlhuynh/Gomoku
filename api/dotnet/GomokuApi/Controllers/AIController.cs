@@ -7,12 +7,12 @@ namespace GomokuApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class GameController(IGomokuService gomokuService, ILogger<GameController> logger) : ControllerBase {
+public class AIController(IGomokuService gomokuService, ILogger<AIController> logger) : ControllerBase {
     private readonly IGomokuService _gomokuService = gomokuService;
-    private readonly ILogger<GameController> _logger = logger;
+    private readonly ILogger<AIController> _logger = logger;
 
-    [HttpPost("ai-move")]
-    public ActionResult<MoveModel> GetAIMove([FromBody] GameStateRequestModel request) {
+    [HttpPost("move")]
+    public ActionResult<MoveModel> GetMove([FromBody] GameStateRequestModel request) {
         try {
             // Map the frontend request to backend model
             GameStateModel gameState = GameStateMapper.MapFromFrontend(request);

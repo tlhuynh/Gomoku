@@ -1,18 +1,19 @@
 using GomokuApi.Constants;
+using GomokuApi.Extensions;
 using GomokuApi.Models;
 using GomokuApi.Services.Helpers;
-using GomokuApi.Utilities.Cache;
 
 namespace GomokuApi.Services;
 
 /// <summary>
 /// Implementation of the Gomoku game service providing AI gameplay and game mechanics
 /// </summary>
-public class GomokuService : IGomokuService {
-    /// <summary>
-    /// Cache for position evaluations to improve performance
-    /// </summary>
-    private readonly Dictionary<string, TranspositionEntry> _positionCache = new(GameConstants.CacheSettings.MAX_CACHE_SIZE);
+/// <remarks>
+/// Initializes a new instance of the GomokuService
+/// </remarks>
+/// <param name="cacheService">Position cache service for performance optimization</param>
+public class GomokuService(IPositionCacheService cacheService) : IGomokuService {
+    private readonly IPositionCacheService _cacheService = cacheService;
 
     /// <summary>
     /// Determines the best move for the AI player using minimax with strategic prioritization
@@ -20,30 +21,37 @@ public class GomokuService : IGomokuService {
     /// <param name="gameState">Current state of the game board</param>
     /// <returns>The best move for the current player</returns>
     public MoveModel GetBestMove(GameStateModel gameState) {
-        CleanCacheIfNeeded();
+        _cacheService.CleanCacheIfNeeded();
 
-        var validMoves = BoardUtilities.GetNearbyEmptySpaces(gameState);
+        List<MoveModel> validMoves = BoardUtilities.GetNearbyEmptySpaces(gameState);
 
         // Handle trivial cases
-        var trivialMove = HandleTrivialCases(gameState, validMoves);
-        if (trivialMove != null) return trivialMove;
+        MoveModel? trivialMove = HandleTrivialCases(validMoves);
+        if (trivialMove != null) {
+            return trivialMove;
+        }
 
         // Handle opening moves
-        var openingMove = HandleOpeningMove(gameState, validMoves);
-        if (openingMove != null) return openingMove;
+        MoveModel? openingMove = HandleOpeningMove(gameState, validMoves);
+        if (openingMove != null) {
+            return openingMove;
+        }
 
         // Try strategic moves first (winning, blocking, etc.)
-        var strategicMove = MoveStrategy.FindBestStrategicMove(gameState, validMoves);
-        if (strategicMove != null) return strategicMove;
+        MoveModel? strategicMove = MoveStrategy.FindBestStrategicMove(gameState, validMoves);
+        if (strategicMove != null) {
+            return strategicMove;
+        }
 
         // Fall back to minimax search
         return FindBestMoveUsingMinimax(gameState, validMoves);
     }
 
     /// <summary>
-    /// Handles trivial game cases
+    /// Handles trivial game cases (single move or empty board)
+    /// <param name="validMoves">List of valid moves</param>
     /// </summary>
-    private static MoveModel? HandleTrivialCases(GameStateModel gameState, List<MoveModel> validMoves) {
+    private static MoveModel? HandleTrivialCases(List<MoveModel> validMoves) {
         if (validMoves.Count == 0) {
             return new MoveModel {
                 Row = GameConstants.BOARD_SIZE / 2,
@@ -82,15 +90,15 @@ public class GomokuService : IGomokuService {
     /// Finds best move using minimax algorithm
     /// </summary>
     private MoveModel FindBestMoveUsingMinimax(GameStateModel gameState, List<MoveModel> validMoves) {
-        var moveCache = new Dictionary<string, int>();
+        Dictionary<string, int> moveCache = [];
         int searchDepth = GetSearchDepth(gameState.Difficulty);
 
         int bestScore = GameConstants.MIN_SCORE;
         MoveModel? bestMove = null;
 
-        foreach (var move in validMoves) {
-            var newState = MakeMove(gameState, move, (int)Player.AI);
-            string stateKey = BoardUtilities.GeneratePositionHash(newState, false);
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeMove(gameState, move, (int)Player.AI);
+            string stateKey = _cacheService.GeneratePositionHash(newState, false);
 
             int score;
             if (moveCache.TryGetValue(stateKey, out int cachedScore)) {
@@ -133,18 +141,12 @@ public class GomokuService : IGomokuService {
     /// Implements minimax algorithm with alpha-beta pruning and caching
     /// </summary>
     private int Minimax(GameStateModel state, int depth, int alpha, int beta, bool isMaximizing) {
-        string positionHash = BoardUtilities.GeneratePositionHash(state, isMaximizing);
+        string positionHash = _cacheService.GeneratePositionHash(state, isMaximizing);
 
         // Check cache
-        if (_positionCache.TryGetValue(positionHash, out var cachedEntry) && cachedEntry.Depth >= depth) {
-            switch (cachedEntry.Type) {
-                case TranspositionEntryType.Exact:
-                    return cachedEntry.Score;
-                case TranspositionEntryType.LowerBound when cachedEntry.Score >= beta:
-                    return cachedEntry.Score;
-                case TranspositionEntryType.UpperBound when cachedEntry.Score <= alpha:
-                    return cachedEntry.Score;
-            }
+        int? cachedScore = _cacheService.GetCachedScore(positionHash, depth, alpha, beta);
+        if (cachedScore.HasValue) {
+            return cachedScore.Value;
         }
 
         // Terminal conditions
@@ -163,7 +165,7 @@ public class GomokuService : IGomokuService {
             }
         }
 
-        var validMoves = BoardUtilities.GetNearbyEmptySpaces(state);
+        List<MoveModel> validMoves = BoardUtilities.GetNearbyEmptySpaces(state);
         if (validMoves.Count == 0) return 0;
 
         validMoves = MoveStrategy.PrioritizeCriticalMoves(state, validMoves, isMaximizing);
@@ -171,9 +173,9 @@ public class GomokuService : IGomokuService {
         int originalAlpha = alpha;
         int bestScore = isMaximizing ? GameConstants.MIN_SCORE : GameConstants.MAX_SCORE;
 
-        foreach (var move in validMoves) {
-            var newState = MakeMove(state, move, isMaximizing ? (int)Player.AI : (int)Player.Human);
-            var score = Minimax(newState, depth - 1, alpha, beta, !isMaximizing);
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeMove(state, move, isMaximizing ? (int)Player.AI : (int)Player.Human);
+            int score = Minimax(newState, depth - 1, alpha, beta, !isMaximizing);
 
             if (isMaximizing) {
                 bestScore = Math.Max(bestScore, score);
@@ -189,46 +191,9 @@ public class GomokuService : IGomokuService {
         }
 
         // Cache the result
-        CachePosition(positionHash, bestScore, depth, originalAlpha, beta);
+        _cacheService.CachePosition(positionHash, bestScore, depth, originalAlpha, beta);
 
         return bestScore;
-    }
-
-    /// <summary>
-    /// Caches position evaluation
-    /// </summary>
-    private void CachePosition(string positionHash, int bestScore, int depth, int originalAlpha, int beta) {
-        TranspositionEntryType entryType;
-        if (bestScore <= originalAlpha) {
-            entryType = TranspositionEntryType.UpperBound;
-        } else if (bestScore >= beta) {
-            entryType = TranspositionEntryType.LowerBound;
-        } else {
-            entryType = TranspositionEntryType.Exact;
-        }
-
-        _positionCache[positionHash] = new TranspositionEntry {
-            Score = bestScore,
-            Depth = depth,
-            Type = entryType
-        };
-    }
-
-    /// <summary>
-    /// Cleans cache when it gets too large
-    /// </summary>
-    private void CleanCacheIfNeeded() {
-        if (_positionCache.Count <= GameConstants.CacheSettings.MAX_CACHE_SIZE) return;
-
-        Dictionary<string, TranspositionEntry>? valuableEntries = _positionCache
-            .OrderByDescending(entry => entry.Value.Depth)
-            .Take(GameConstants.CacheSettings.REDUCED_CACHE_SIZE)
-            .ToDictionary(pair => pair.Key, pair => pair.Value);
-
-        _positionCache.Clear();
-        foreach (var entry in valuableEntries) {
-            _positionCache[entry.Key] = entry.Value;
-        }
     }
 
     /// <summary>

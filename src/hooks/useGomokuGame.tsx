@@ -69,7 +69,7 @@ class GomokuGame {
       // Create a new abort controller
       this.abortController = new AbortController();
       
-      const response = await fetch(`${API_URL}/game/ai-move`, {
+      const response = await fetch(`${API_URL}/AI/move`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -64,40 +64,40 @@ public static class PatternAnalyzer {
         int multiplier = player == Player.AI ? 1 : -1;
 
         // Various three-stone patterns
-        var threePatterns = new[] {
-            new[] { playerValue, playerValue, playerValue, 0, 0 },
-            new[] { 0, 0, playerValue, playerValue, playerValue },
-            new[] { playerValue, playerValue, 0, playerValue, 0 },
-            new[] { 0, playerValue, 0, playerValue, playerValue },
-            new[] { playerValue, 0, playerValue, playerValue, 0 }
-        };
+        int[][] threePatterns = [
+            [playerValue, playerValue, playerValue, 0, 0],
+            [0, 0, playerValue, playerValue, playerValue],
+            [playerValue, playerValue, 0, playerValue, 0],
+            [0, playerValue, 0, playerValue, playerValue],
+            [playerValue, 0, playerValue, playerValue, 0]
+        ];
 
-        foreach (var pattern in threePatterns) {
+        foreach (int[] pattern in threePatterns) {
             if (ContainsPattern(line, playerValue, pattern)) {
                 score += GameConstants.PatternScores.THREE_WITH_EXTENSION * multiplier;
             }
         }
 
         // Broken double-open threes
-        var brokenPatterns = new[] {
-            new[] { 0, 0, playerValue, 0, playerValue, playerValue, 0, 0 },
-            new[] { 0, 0, playerValue, playerValue, 0, playerValue, 0, 0 }
-        };
+        int[][] brokenPatterns = [
+            [0, 0, playerValue, 0, playerValue, playerValue, 0, 0],
+            [0, 0, playerValue, playerValue, 0, playerValue, 0, 0]
+        ];
 
-        foreach (var pattern in brokenPatterns) {
+        foreach (int[] pattern in brokenPatterns) {
             if (ContainsPattern(line, playerValue, pattern)) {
                 score += GameConstants.PatternScores.BROKEN_DOUBLE_OPEN_THREE * multiplier;
             }
         }
 
         // Potential threats
-        var threatPatterns = new[] {
-            new[] { 0, playerValue, playerValue, 0, 0 },
-            new[] { 0, 0, playerValue, playerValue, 0 },
-            new[] { 0, playerValue, 0, playerValue, 0 }
-        };
+        int[][] threatPatterns = [
+            [0, playerValue, playerValue, 0, 0],
+            [0, 0, playerValue, playerValue, 0],
+            [0, playerValue, 0, playerValue, 0]
+        ];
 
-        foreach (var pattern in threatPatterns) {
+        foreach (int[] pattern in threatPatterns) {
             if (ContainsPattern(line, playerValue, pattern)) {
                 score += GameConstants.PatternScores.POTENTIAL_THREAT * multiplier;
             }
@@ -125,7 +125,7 @@ public static class PatternAnalyzer {
     public static bool CheckGuaranteedWin(GameStateModel state, MoveModel move, Player player) {
         int playerValue = (int)player;
 
-        foreach (var dir in GameConstants.DIRECTIONS) {
+        foreach (int[] dir in GameConstants.DIRECTIONS) {
             int[] line = BoardUtilities.GetLineAt(state, move.Row, move.Col, dir[0], dir[1]);
 
             // Double-end four pattern
@@ -155,7 +155,7 @@ public static class PatternAnalyzer {
     public static bool CheckOpenThreeFormation(GameStateModel state, MoveModel move, Player player) {
         int playerValue = (int)player;
 
-        foreach (var dir in GameConstants.DIRECTIONS) {
+        foreach (int[] dir in GameConstants.DIRECTIONS) {
             int[] line = BoardUtilities.GetLineAt(state, move.Row, move.Col, dir[0], dir[1]);
 
             if (ContainsPattern(line, playerValue, [0, 0, playerValue, playerValue, playerValue, 0, 0])) {
@@ -190,7 +190,7 @@ public static class PatternAnalyzer {
             for (int j = 0; j < GameConstants.BOARD_SIZE && threats < 2; j++) {
                 if (state.Board[i, j] != 0) continue;
 
-                var tempState = new GameStateModel {
+                GameStateModel tempState = new() {
                     Board = (int[,])state.Board.Clone(),
                     Difficulty = state.Difficulty
                 };
@@ -216,7 +216,7 @@ public static class PatternAnalyzer {
     public static bool CheckFourInRowThreat(GameStateModel state, int row, int col, Player player) {
         int playerValue = (int)player;
 
-        foreach (var dir in GameConstants.DIRECTIONS) {
+        foreach (int[] dir in GameConstants.DIRECTIONS) {
             int count = 1;
 
             // Count in both directions

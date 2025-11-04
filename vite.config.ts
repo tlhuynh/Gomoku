@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api/game': {
+      '/api': {
         target: 'http://localhost:5268', // .NET
         secure: false,
         changeOrigin: true
