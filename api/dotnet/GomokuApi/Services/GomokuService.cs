@@ -1,0 +1,290 @@
+using GomokuApi.Constants;
+using GomokuApi.Extensions;
+using GomokuApi.Models;
+using GomokuApi.Services.Helpers;
+
+namespace GomokuApi.Services;
+
+/// <summary>
+/// Implementation of the Gomoku game service providing AI gameplay and game mechanics
+/// </summary>
+/// <remarks>
+/// Initializes a new instance of the GomokuService
+/// </remarks>
+/// <param name="cacheService">Position cache service for performance optimization</param>
+public class GomokuService(IPositionCacheService cacheService) : IGomokuService {
+    private readonly IPositionCacheService _cacheService = cacheService;
+
+    /// <summary>
+    /// Determines the best move for the AI player using minimax with strategic prioritization
+    /// </summary>
+    /// <param name="gameState">Current state of the game board</param>
+    /// <returns>The best move for the current player</returns>
+    public MoveModel GetBestMove(GameStateModel gameState) {
+        _cacheService.CleanCacheIfNeeded();
+
+        List<MoveModel> validMoves = BoardUtilities.GetNearbyEmptySpaces(gameState);
+
+        // Handle trivial cases
+        MoveModel? trivialMove = HandleTrivialCases(validMoves);
+        if (trivialMove != null) {
+            return trivialMove;
+        }
+
+        // Handle opening moves
+        MoveModel? openingMove = HandleOpeningMove(gameState, validMoves);
+        if (openingMove != null) {
+            return openingMove;
+        }
+
+        // Try strategic moves first (winning, blocking, etc.)
+        MoveModel? strategicMove = MoveStrategy.FindBestStrategicMove(gameState, validMoves);
+        if (strategicMove != null) {
+            return strategicMove;
+        }
+
+        // Fall back to minimax search
+        return FindBestMoveUsingMinimax(gameState, validMoves);
+    }
+
+    /// <summary>
+    /// Handles trivial game cases (single move or empty board)
+    /// <param name="validMoves">List of valid moves</param>
+    /// </summary>
+    private static MoveModel? HandleTrivialCases(List<MoveModel> validMoves) {
+        if (validMoves.Count == 0) {
+            return new MoveModel {
+                Row = GameConstants.BOARD_SIZE / 2,
+                Col = GameConstants.BOARD_SIZE / 2
+            };
+        }
+
+        if (validMoves.Count == 1) {
+            return validMoves[0];
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Handles opening move logic
+    /// </summary>
+    private static MoveModel? HandleOpeningMove(GameStateModel gameState, List<MoveModel> validMoves) {
+        if (gameState.Board.Cast<int>().Count(cell => cell != 0) > 2) {
+            return null; // Not an opening anymore
+        }
+
+        int center = GameConstants.BOARD_SIZE / 2;
+
+        // Take center if available
+        if (gameState.Board[center, center] == 0) {
+            return new MoveModel { Row = center, Col = center };
+        }
+
+        // Otherwise prefer near-center positions
+        return validMoves.FirstOrDefault(move =>
+            Math.Abs(move.Row - center) <= 2 && Math.Abs(move.Col - center) <= 2);
+    }
+
+    /// <summary>
+    /// Finds best move using minimax algorithm with parallel evaluation
+    /// </summary>
+    private MoveModel FindBestMoveUsingMinimax(GameStateModel gameState, List<MoveModel> validMoves) {
+        int searchDepth = GetSearchDepth(gameState.Difficulty);
+
+        // For small move sets, use sequential processing to avoid threading overhead
+        if (validMoves.Count <= 4) {
+            return FindBestMoveSequential(gameState, validMoves, searchDepth);
+        }
+
+        // Use parallel processing for larger move sets
+        return FindBestMoveParallel(gameState, validMoves, searchDepth);
+    }
+
+    /// <summary>
+    /// Sequential move evaluation for small move sets
+    /// </summary>
+    private MoveModel FindBestMoveSequential(GameStateModel gameState, List<MoveModel> validMoves, int searchDepth) {
+        Dictionary<string, int> moveCache = [];
+        int bestScore = GameConstants.MIN_SCORE;
+        MoveModel? bestMove = null;
+
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeMove(gameState, move, (int)Player.AI);
+            string stateKey = _cacheService.GeneratePositionHash(newState, false);
+
+            int score;
+            if (moveCache.TryGetValue(stateKey, out int cachedScore)) {
+                score = cachedScore;
+            } else {
+                score = Minimax(newState, searchDepth - 1, GameConstants.MIN_SCORE, GameConstants.MAX_SCORE, false);
+                moveCache[stateKey] = score;
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestMove = move;
+
+                // Early termination for winning moves
+                if (score >= GameConstants.MAX_SCORE - 100) {
+                    break;
+                }
+            }
+        }
+
+        return bestMove ?? validMoves[0];
+    }
+
+    /// <summary>
+    /// Parallel move evaluation for larger move sets
+    /// </summary>
+    private MoveModel FindBestMoveParallel(GameStateModel gameState, List<MoveModel> validMoves, int searchDepth) {
+        object lockObject = new();
+        int bestScore = GameConstants.MIN_SCORE;
+        MoveModel? bestMove = null;
+        bool earlyTermination = false;
+
+        // Use parallel processing with degree of parallelism based on CPU cores
+        ParallelOptions parallelOptions = new() {
+            MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, validMoves.Count)
+        };
+
+        Parallel.ForEach(validMoves, parallelOptions, (move, loopState) => {
+            // Check for early termination
+            if (earlyTermination) {
+                loopState.Stop();
+                return;
+            }
+
+            GameStateModel newState = MakeMove(gameState, move, (int)Player.AI);
+            string stateKey = _cacheService.GeneratePositionHash(newState, false);
+
+            // Check cache first (cache service is now thread-safe)
+            int? cachedScore = _cacheService.GetCachedScore(stateKey, searchDepth - 1,
+                GameConstants.MIN_SCORE, GameConstants.MAX_SCORE);
+
+            int score;
+            if (cachedScore.HasValue) {
+                score = cachedScore.Value;
+            } else {
+                score = Minimax(newState, searchDepth - 1, GameConstants.MIN_SCORE, GameConstants.MAX_SCORE, false);
+            }
+
+            lock (lockObject) {
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMove = move;
+
+                    // Early termination for winning moves
+                    if (score >= GameConstants.MAX_SCORE - 100) {
+                        earlyTermination = true;
+                        loopState.Stop();
+                    }
+                }
+            }
+        });
+
+        return bestMove ?? validMoves[0];
+    }
+
+    /// <summary>
+    /// Gets search depth based on difficulty
+    /// </summary>
+    private static int GetSearchDepth(Utilities.Difficulty difficulty) {
+        return difficulty switch {
+            Utilities.Difficulty.Easy => GameConstants.SearchDepth.EASY,
+            Utilities.Difficulty.Hard => GameConstants.SearchDepth.HARD,
+            Utilities.Difficulty.Expert => GameConstants.SearchDepth.EXPERT,
+            _ => GameConstants.SearchDepth.MEDIUM
+        };
+    }
+
+    /// <summary>
+    /// Implements minimax algorithm with alpha-beta pruning and caching
+    /// </summary>
+    private int Minimax(GameStateModel state, int depth, int alpha, int beta, bool isMaximizing) {
+        string positionHash = _cacheService.GeneratePositionHash(state, isMaximizing);
+
+        // Check cache
+        int? cachedScore = _cacheService.GetCachedScore(positionHash, depth, alpha, beta);
+        if (cachedScore.HasValue) {
+            return cachedScore.Value;
+        }
+
+        // Terminal conditions
+        if (depth == 0) return BoardEvaluator.EvaluateBoard(state);
+
+        // Check for immediate threats
+        (bool aiWinningMove, bool humanWinningMove) = WinChecker.DetectImmediateThreats(state);
+        if (aiWinningMove) return GameConstants.MAX_SCORE - (5 - depth);
+        if (humanWinningMove) return GameConstants.MIN_SCORE + (5 - depth);
+
+        // Check for critical threats at depth 1
+        if (depth == 1) {
+            int criticalThreatScore = BoardEvaluator.DetectCriticalThreats(state, isMaximizing);
+            if (criticalThreatScore != 0) {
+                return criticalThreatScore;
+            }
+        }
+
+        List<MoveModel> validMoves = BoardUtilities.GetNearbyEmptySpaces(state);
+        if (validMoves.Count == 0) return 0;
+
+        validMoves = MoveStrategy.PrioritizeCriticalMoves(state, validMoves, isMaximizing);
+
+        int originalAlpha = alpha;
+        int bestScore = isMaximizing ? GameConstants.MIN_SCORE : GameConstants.MAX_SCORE;
+
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeMove(state, move, isMaximizing ? (int)Player.AI : (int)Player.Human);
+            int score = Minimax(newState, depth - 1, alpha, beta, !isMaximizing);
+
+            if (isMaximizing) {
+                bestScore = Math.Max(bestScore, score);
+                alpha = Math.Max(alpha, score);
+                if (score >= GameConstants.MAX_SCORE - 10) break; // Early win detection
+            } else {
+                bestScore = Math.Min(bestScore, score);
+                beta = Math.Min(beta, score);
+                if (score <= GameConstants.MIN_SCORE + 10) break; // Early loss detection
+            }
+
+            if (beta <= alpha) break; // Alpha-beta pruning
+        }
+
+        // Cache the result
+        _cacheService.CachePosition(positionHash, bestScore, depth, originalAlpha, beta);
+
+        return bestScore;
+    }
+
+    /// <summary>
+    /// Validates if a move is legal
+    /// </summary>
+    public bool IsValidMove(GameStateModel gameState, MoveModel move) {
+        return move.Row >= 0 && move.Row < GameConstants.BOARD_SIZE &&
+               move.Col >= 0 && move.Col < GameConstants.BOARD_SIZE &&
+               gameState.Board[move.Row, move.Col] == 0;
+    }
+
+    /// <summary>
+    /// Checks if the last move created a winning condition
+    /// </summary>
+    public bool CheckWin(GameStateModel gameState, MoveModel lastMove) {
+        return WinChecker.CheckWin(gameState, lastMove);
+    }
+
+    /// <summary>
+    /// Applies a move to the game state
+    /// </summary>
+    public GameStateModel MakeMove(GameStateModel gameState, MoveModel move, int playerToMove) {
+        if (!IsValidMove(gameState, move)) {
+            return gameState;
+        }
+
+        return new GameStateModel {
+            Board = (int[,])gameState.Board.Clone(),
+            Difficulty = gameState.Difficulty
+        }.ApplyMove(move, playerToMove);
+    }
+}

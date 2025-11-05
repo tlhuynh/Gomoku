@@ -170,6 +170,12 @@
     color: black;
 }
 
+.select-dropdown:disabled {
+    background-color: #f0f0f0;
+    color: #888;
+    cursor: not-allowed;
+}
+
 .control-button {
     padding: 12px 24px;
     font-size: 16px;

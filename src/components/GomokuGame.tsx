@@ -107,6 +107,7 @@ function GomokuGame() {
           </label>
           <select
             className="select-dropdown"
+            disabled={gameStarted}
             value={firstMovePlayer}
             onChange={(e) => setFirstMovePlayer(e.target.value)}>
             <option value="1">Player one</option>

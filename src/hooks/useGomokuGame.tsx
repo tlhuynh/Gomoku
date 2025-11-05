@@ -1,15 +1,16 @@
 import { useCallback, useState } from 'react';
-import type { GameState, Move, AIResponse, Difficulty } from '../types/interfaces';
-import { API_URL } from '../constants';
+import type { GameState, Move, Difficulty } from '../types/interfaces';
+import { API_URL, BOARD_SIZE } from '../constants';
 
 class GomokuGame {
   private boardSize: number;
   private firstMovePlayer: number;
   private gameDifficulty: Difficulty = "medium"; // Default difficulty
+  private abortController: AbortController | null = null;
 
   private gameState: GameState;
   
-  constructor(boardSize: number = 15, firstMovePlayer = "1", gameDifficulty: Difficulty = 'medium') {
+  constructor(boardSize: number = BOARD_SIZE, firstMovePlayer = "1", gameDifficulty: Difficulty = 'medium') {
     this.boardSize = boardSize;
     this.firstMovePlayer = +firstMovePlayer;
     this.gameDifficulty = gameDifficulty;
@@ -31,7 +32,7 @@ class GomokuGame {
   }
 
   // Make a human move
-  async makeHumanMove(row: number, col: number): Promise<boolean> {
+  makeHumanMove(row: number, col: number): boolean {
     if (!this.isValidMove(row, col)) {
       return false;
     }
@@ -54,32 +55,41 @@ class GomokuGame {
     // Switch to AI turn
     this.gameState.currentPlayer = 2;
     
-    // Get AI move
-    await this.makeAIMove(this.gameState.difficulty);
-    
     return true;
   }
 
   // Get AI move from backend
   async makeAIMove(difficulty: Difficulty = 'medium'): Promise<void> {
     try {
-      const response = await fetch(`${API_URL}/ai-move`, { // TODO make sure the name of this route here matches whatever name we use in the backend
+      // Cancel any previous request
+      if (this.abortController) {
+        this.abortController.abort();
+      }
+      
+      // Create a new abort controller
+      this.abortController = new AbortController();
+      
+      const response = await fetch(`${API_URL}/AI/move`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           board: this.gameState.board,
-          difficulty
-        })
+          difficulty: difficulty
+        }),
+        signal: this.abortController.signal
       });
+      
+      // Request completed, clear the controller
+      this.abortController = null;
 
       if (!response.ok) {
         throw new Error('Failed to get AI move');
       }
-
-      const aiMove: AIResponse = await response.json();
       
+      const aiMove: Move = await response.json();
+
       // Make AI move
       this.gameState.board[aiMove.row][aiMove.col] = 2;
       this.gameState.lastMove = { row: aiMove.row, col: aiMove.col };
@@ -95,8 +105,14 @@ class GomokuGame {
       }
       
     } catch (error) {
+      // Check if this was an abort error (which is expected during cancellation)
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        console.log('AI move request was cancelled');
+        return; // Don't do fallback for intentional cancellation
+      }
+      
       console.error('Error getting AI move:', error);
-      // Fallback to random move if API fails
+      // Fallback to random move if API fails for other reasons
       this.makeRandomAIMove();
     }
   }
@@ -189,7 +205,18 @@ class GomokuGame {
     return this.boardSize;
   } 
 
+  // Add method to cancel any pending request
+  cancelPendingRequests(): void {
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
+  }
+
   resetGame(firstMovePlayer: number): void {
+    // Cancel any pending AI moves before resetting
+    this.cancelPendingRequests();
+    
     this.firstMovePlayer = firstMovePlayer;
     this.gameState = this.initializeGame();
   }
@@ -223,7 +250,7 @@ class GomokuGame {
 }
 
 // Custom Hook for Gomoku Game
-const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1") => {
+const useGomokuGame = (boardSize: number = BOARD_SIZE, firstMovePlayer = "1") => {
   const [game] = useState(() => new GomokuGame(boardSize, firstMovePlayer));
   const [gameState, setGameState] = useState(game.getGameState());
   const [isLoading, setIsLoading] = useState(false);
@@ -232,9 +259,18 @@ const useGomokuGame = (boardSize: number = 15, firstMovePlayer = "1") => {
     if (!game.isHumanTurn() || isLoading) return;
 
     setIsLoading(true);
-    const success = await game.makeHumanMove(row, col);
+    // Handle human move first
+    const success: boolean = game.makeHumanMove(row, col);
     if (success) {
       setGameState(game.getGameState());
+      
+      // Check if game is still in progress before making AI move
+      const currentState = game.getGameState();
+      if (currentState.gameStatus === 'playing' && currentState.currentPlayer === 2) {
+        // Now handle AI move separately
+        await game.makeAIMove(currentState.difficulty);
+        setGameState(game.getGameState());
+      }
     }
     setIsLoading(false);
   }, [game, isLoading]);
