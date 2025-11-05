@@ -215,7 +215,7 @@ public class GomokuService(IPositionCacheService cacheService) : IGomokuService 
         if (depth == 0) return BoardEvaluator.EvaluateBoard(state);
 
         // Check for immediate threats
-        var (aiWinningMove, humanWinningMove) = WinChecker.DetectImmediateThreats(state);
+        (bool aiWinningMove, bool humanWinningMove) = WinChecker.DetectImmediateThreats(state);
         if (aiWinningMove) return GameConstants.MAX_SCORE - (5 - depth);
         if (humanWinningMove) return GameConstants.MIN_SCORE + (5 - depth);
 

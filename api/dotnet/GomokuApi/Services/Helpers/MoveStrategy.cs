@@ -83,7 +83,7 @@ public static class MoveStrategy {
     }
 
     /// <summary>
-    /// Finds guaranteed winning move
+    /// Finds guaranteed winning move using pattern analysis
     /// <param name="gameState">Current game state</param>
     /// <param name="validMoves">List of valid moves</param>
     /// </summary>
@@ -113,7 +113,7 @@ public static class MoveStrategy {
     }
 
     /// <summary>
-    /// Finds move that blocks opponent's guaranteed win
+    /// Finds move that blocks opponent's guaranteed win using pattern analysis
     /// <param name="gameState">Current game state</param>
     /// <param name="validMoves">List of valid moves</param>
     /// </summary>
@@ -121,7 +121,7 @@ public static class MoveStrategy {
         foreach (var move in validMoves) {
             var tempState = MakeTempMove(gameState, move, Player.Human);
             if (PatternAnalyzer.CheckGuaranteedWin(tempState, move, Player.Human)) {
-                return move;
+                return move; // Block this move
             }
         }
         return null;

@@ -140,6 +140,32 @@ public static class PatternAnalyzer {
                     return true;
                 }
             }
+
+            // Disconnected guaranteed win patterns
+            if (HasDisconnectedGuaranteedWinPattern(line, playerValue)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks for disconnected patterns that create guaranteed wins
+    /// </summary>
+    /// <param name="state">Game state after move</param>
+    /// <param name="move">Move made</param>
+    /// <param name="player">Player who made the move</param>
+    /// <returns>True if disconnected pattern creates guaranteed win</returns>
+    public static bool CheckDisconnectedGuaranteedWin(GameStateModel state, MoveModel move, Player player) {
+        int playerValue = (int)player;
+
+        foreach (int[] dir in GameConstants.DIRECTIONS) {
+            int[] line = BoardUtilities.GetLineAt(state, move.Row, move.Col, dir[0], dir[1]);
+
+            if (HasDisconnectedGuaranteedWinPattern(line, playerValue)) {
+                return true;
+            }
         }
 
         return false;
@@ -315,6 +341,46 @@ public static class PatternAnalyzer {
                 consecutive = 0;
             }
         }
+        return false;
+    }
+
+    /// <summary>
+    /// Detects specific disconnected patterns that guarantee wins
+    /// </summary>
+    /// <param name="line">Line to analyze</param>
+    /// <param name="player">Player value</param>
+    /// <returns>True if guaranteed win pattern found</returns>
+    private static bool HasDisconnectedGuaranteedWinPattern(int[] line, int player) {
+        // Pattern 1: _XX_X_ - Creates 3 simultaneous threats
+        if (ContainsPattern(line, player, [0, player, player, 0, player, 0])) {
+            return true;
+        }
+
+        // Pattern 2: _X_XX_ - Creates 3 simultaneous threats  
+        if (ContainsPattern(line, player, [0, player, 0, player, player, 0])) {
+            return true;
+        }
+
+        // Pattern 3: _XXX_X_ - Extended disconnected pattern
+        if (ContainsPattern(line, player, [0, player, player, player, 0, player, 0])) {
+            return true;
+        }
+
+        // Pattern 4: _X_XXX_ - Extended disconnected pattern
+        if (ContainsPattern(line, player, [0, player, 0, player, player, player, 0])) {
+            return true;
+        }
+
+        // Pattern 5: _XX_XX_ - Double disconnected pair
+        if (ContainsPattern(line, player, [0, player, player, 0, player, player, 0])) {
+            return true;
+        }
+
+        // Pattern 6: _X_X_X_ - Spaced pattern creating multiple threats
+        if (ContainsPattern(line, player, [0, player, 0, player, 0, player, 0])) {
+            return true;
+        }
+
         return false;
     }
 }
