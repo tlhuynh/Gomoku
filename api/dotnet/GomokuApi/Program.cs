@@ -1,6 +1,6 @@
 using GomokuApi.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -8,7 +8,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Add CORS
-var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ??
+string[] corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ??
                  ["http://localhost:5173"]; // Default to localhost:5173 (react app URL) if not set
 builder.Services.AddCors(options => {
     options.AddPolicy("AllowReactApp",
@@ -23,7 +23,7 @@ builder.Services.AddCors(options => {
 builder.Services.AddScoped<IPositionCacheService, PositionCacheService>();
 builder.Services.AddScoped<IGomokuService, GomokuService>();
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 // Middleware pipeline configuration
 // Configure the HTTP request pipeline.

@@ -17,11 +17,12 @@ public static class BoardUtilities {
     /// <param name="dcol">Column direction</param>
     /// <returns>Array of cell values in the line</returns>
     public static int[] GetLineAt(GameStateModel state, int row, int col, int drow, int dcol) {
-        var line = new int[GameConstants.CacheSettings.LINE_LENGTH];
+        int[] line = new int[GameConstants.CacheSettings.LINE_LENGTH];
+        int center = GameConstants.CacheSettings.LINE_CENTER;
 
-        for (int i = -GameConstants.CacheSettings.LINE_CENTER; i <= GameConstants.CacheSettings.LINE_CENTER; i++) {
-            int newRow = row + i * drow;
-            int newCol = col + i * dcol;
+        for (int i = 0; i < GameConstants.CacheSettings.LINE_LENGTH; i++) {
+            int newRow = row + (i - center) * drow;
+            int newCol = col + (i - center) * dcol;
 
             int value = -1; // Out of bounds marker
             if (newRow >= 0 && newRow < GameConstants.BOARD_SIZE &&
@@ -81,7 +82,7 @@ public static class BoardUtilities {
     /// <param name="isMaximizingPlayer">Whether it's the maximizing player's turn</param>
     /// <returns>Hash string</returns>
     public static string GeneratePositionHash(GameStateModel state, bool? isMaximizingPlayer = null) {
-        var hash = new System.Text.StringBuilder();
+        System.Text.StringBuilder hash = new();
 
         for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
             for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
@@ -161,7 +162,7 @@ public static class BoardUtilities {
     public static (List<MoveModel> moves, long executionTimeMs, string algorithmUsed) GetNearbyEmptySpacesWithStats(
         GameStateModel state, bool forceSequential = false) {
 
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
         List<MoveModel> moves;
         string algorithm;
@@ -248,7 +249,7 @@ public static class BoardUtilities {
         }
 
         // Parallel processing of occupied positions
-        var parallelOptions = new ParallelOptions {
+        ParallelOptions parallelOptions = new() {
             MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, occupiedPositions.Count)
         };
 
@@ -267,10 +268,16 @@ public static class BoardUtilities {
         List<MoveModel> moves = [.. candidatePositions.Select(pos => new MoveModel { Row = pos.row, Col = pos.col })];
 
         // Parallel evaluation of moves
-        var evaluatedMoves = moves.AsParallel()
-            .Select(move => new { Move = move, Score = QuickEvaluate(state, move) })
-            .OrderByDescending(x => x.Score)
-            .Select(x => x.Move)
+        double center = GameConstants.BOARD_SIZE / 2.0;
+
+        // Convert to evaluated moves and sort by proximity to center
+        List<MoveModel> evaluatedMoves = moves.AsParallel()
+            .Select(move => (
+                move,
+                distance: Math.Sqrt(Math.Pow(move.Row - center, 2) + Math.Pow(move.Col - center, 2))
+            ))
+            .OrderBy(x => x.distance)
+            .Select(x => x.move)
             .ToList();
 
         return evaluatedMoves;

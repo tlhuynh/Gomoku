@@ -99,7 +99,7 @@ public static class WinChecker {
                 }
 
                 // Check AI winning move
-                var tempState = CreateTempState(state);
+                GameStateModel tempState = CreateTempState(state);
                 tempState.Board[i, j] = (int)Player.AI;
                 if (CheckWinAtPosition(tempState, i, j)) {
                     aiWinningMove = true;
@@ -149,7 +149,7 @@ public static class WinChecker {
     /// <param name="col">Column</param>
     /// <returns>True if valid</returns>
     private static bool IsValidPosition(int row, int col) {
-        return row >= 0 && row < GameConstants.BOARD_SIZE && 
+        return row >= 0 && row < GameConstants.BOARD_SIZE &&
                col >= 0 && col < GameConstants.BOARD_SIZE;
     }
 

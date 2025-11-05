@@ -33,16 +33,16 @@ public static class MoveStrategy {
     /// <returns>Best move or null if none found</returns>
     public static MoveModel? FindBestStrategicMove(GameStateModel gameState, List<MoveModel> validMoves) {
         // Check each priority level in order - prioritize defense when necessary
-        var priorities = new[] {
+        MovePriority[] priorities = [
             MovePriority.ImmediateWin,        // 1. Make our immediate win move
             MovePriority.BlockWin,            // 2. Block their immediate win move  
             MovePriority.GuaranteedWin,       // 3. Make our guaranteed win move (because they have to block)
             MovePriority.BlockGuaranteedWin,  // 4. Block their guaranteed winning move
             MovePriority.OpenThree            // 5. Make our win threat move (OpenThree covers threat creation)
-        };
+        ];
 
-        foreach (var priority in priorities) {
-            var move = FindMoveByPriority(gameState, validMoves, priority);
+        foreach (MovePriority priority in priorities) {
+            MoveModel? move = FindMoveByPriority(gameState, validMoves, priority);
             if (move != null) return move;
         }
 
@@ -73,8 +73,8 @@ public static class MoveStrategy {
     /// <param name="validMoves">List of valid moves</param>
     /// </summary>
     private static MoveModel? FindImmediateWinMove(GameStateModel gameState, List<MoveModel> validMoves) {
-        foreach (var move in validMoves) {
-            var newState = MakeTempMove(gameState, move, Player.AI);
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeTempMove(gameState, move, Player.AI);
             if (WinChecker.CheckWin(newState, move)) {
                 return move;
             }
@@ -88,8 +88,8 @@ public static class MoveStrategy {
     /// <param name="validMoves">List of valid moves</param>
     /// </summary>
     private static MoveModel? FindGuaranteedWinMove(GameStateModel gameState, List<MoveModel> validMoves) {
-        foreach (var move in validMoves) {
-            var newState = MakeTempMove(gameState, move, Player.AI);
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeTempMove(gameState, move, Player.AI);
             if (PatternAnalyzer.CheckGuaranteedWin(newState, move, Player.AI)) {
                 return move;
             }
@@ -103,8 +103,8 @@ public static class MoveStrategy {
     /// <param name="validMoves">List of valid moves</param>
     /// </summary>
     private static MoveModel? FindBlockImmediateWinMove(GameStateModel gameState, List<MoveModel> validMoves) {
-        foreach (var move in validMoves) {
-            var tempState = MakeTempMove(gameState, move, Player.Human);
+        foreach (MoveModel move in validMoves) {
+            GameStateModel tempState = MakeTempMove(gameState, move, Player.Human);
             if (WinChecker.CheckWin(tempState, move)) {
                 return move;
             }
@@ -118,8 +118,8 @@ public static class MoveStrategy {
     /// <param name="validMoves">List of valid moves</param>
     /// </summary>
     private static MoveModel? FindBlockGuaranteedWinMove(GameStateModel gameState, List<MoveModel> validMoves) {
-        foreach (var move in validMoves) {
-            var tempState = MakeTempMove(gameState, move, Player.Human);
+        foreach (MoveModel move in validMoves) {
+            GameStateModel tempState = MakeTempMove(gameState, move, Player.Human);
             if (PatternAnalyzer.CheckGuaranteedWin(tempState, move, Player.Human)) {
                 return move; // Block this move
             }
@@ -134,16 +134,16 @@ public static class MoveStrategy {
     /// </summary>
     private static MoveModel? FindOpenThreeMove(GameStateModel gameState, List<MoveModel> validMoves) {
         // First, try to create our own open three
-        foreach (var move in validMoves) {
-            var newState = MakeTempMove(gameState, move, Player.AI);
+        foreach (MoveModel move in validMoves) {
+            GameStateModel newState = MakeTempMove(gameState, move, Player.AI);
             if (PatternAnalyzer.CheckOpenThreeFormation(newState, move, Player.AI)) {
                 return move;
             }
         }
 
         // If no strong offensive move, block opponent's open three formations
-        foreach (var move in validMoves) {
-            var tempState = MakeTempMove(gameState, move, Player.Human);
+        foreach (MoveModel move in validMoves) {
+            GameStateModel tempState = MakeTempMove(gameState, move, Player.Human);
             if (PatternAnalyzer.CheckOpenThreeFormation(tempState, move, Player.Human)) {
                 return move; // Block their threat by taking their spot
             }
@@ -167,19 +167,19 @@ public static class MoveStrategy {
         List<MoveModel> threatMoves = [];
         List<MoveModel> normalMoves = [];
 
-        var currentPlayer = isMaximizing ? Player.AI : Player.Human;
-        var opponent = currentPlayer == Player.AI ? Player.Human : Player.AI;
+        Player currentPlayer = isMaximizing ? Player.AI : Player.Human;
+        Player opponent = currentPlayer == Player.AI ? Player.Human : Player.AI;
 
-        foreach (var move in moves) {
+        foreach (MoveModel move in moves) {
             // 1. Check for immediate winning moves
-            var tempStateWin = MakeTempMove(state, move, currentPlayer);
+            GameStateModel tempStateWin = MakeTempMove(state, move, currentPlayer);
             if (WinChecker.CheckWinAtPosition(tempStateWin, move.Row, move.Col)) {
                 winningMoves.Add(move);
                 continue;
             }
 
             // 2. Check for blocking opponent's immediate win
-            var tempStateBlock = MakeTempMove(state, move, opponent);
+            GameStateModel tempStateBlock = MakeTempMove(state, move, opponent);
             if (WinChecker.CheckWinAtPosition(tempStateBlock, move.Row, move.Col)) {
                 blockingMoves.Add(move);
                 continue;

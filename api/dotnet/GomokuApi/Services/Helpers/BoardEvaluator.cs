@@ -59,8 +59,8 @@ public static class BoardEvaluator {
     private static int EvaluatePosition(GameStateModel state, int row, int col) {
         int score = 0;
 
-        foreach (var dir in GameConstants.DIRECTIONS) {
-            score += EvaluateLine(state, row, col, dir[0], dir[1]);
+        foreach (int[] dir in GameConstants.DIRECTIONS) {
+            score += EvaluateLineStrength(state, row, col, dir[0], dir[1]);
         }
 
         return score;
@@ -75,9 +75,9 @@ public static class BoardEvaluator {
     /// <param name="drow">Row direction</param>
     /// <param name="dcol">Column direction</param>
     /// <returns>Line evaluation score</returns>
-    private static int EvaluateLine(GameStateModel state, int row, int col, int drow, int dcol) {
-        var line = BoardUtilities.GetLineAt(state, row, col, drow, dcol);
-        var validPositions = line.Count(cell => cell != -1);
+    private static int EvaluateLineStrength(GameStateModel state, int row, int col, int drow, int dcol) {
+        int[] line = BoardUtilities.GetLineAt(state, row, col, drow, dcol);
+        int validPositions = line.Count(cell => cell != -1);
 
         // Need minimum positions for meaningful patterns
         if (validPositions < 5) return 0;
@@ -140,8 +140,8 @@ public static class BoardEvaluator {
                 if (state.Board[i, j] == 0) continue;
 
                 int player = state.Board[i, j];
-                int connectionScore = player == (int)Player.AI ? 
-                    GameConstants.BoardControlScores.STONE_CONNECTION : 
+                int connectionScore = player == (int)Player.AI ?
+                    GameConstants.BoardControlScores.STONE_CONNECTION :
                     -GameConstants.BoardControlScores.STONE_CONNECTION;
 
                 // Check all adjacent directions for connections
@@ -166,7 +166,7 @@ public static class BoardEvaluator {
     /// <param name="isMaximizing">Whether maximizing player's turn</param>
     /// <returns>Critical threat score</returns>
     public static int DetectCriticalThreats(GameStateModel state, bool isMaximizing) {
-        var threats = AnalyzeAllThreats(state);
+        ThreatInfo threats = AnalyzeAllThreats(state);
 
         // Return scores based on threats found and whose turn it is
         if (threats.HumanDoubleEndFour) {
@@ -200,16 +200,16 @@ public static class BoardEvaluator {
     /// Analyzes all threats on the board
     /// </summary>
     /// <param name="state">Game state</param>
-    /// <returns>Threat analysis result</returns>
+    /// <returns>Threat analysis</returns>
     private static ThreatInfo AnalyzeAllThreats(GameStateModel state) {
-        var threats = new ThreatInfo();
+        ThreatInfo threats = new();
 
         for (int i = 0; i < GameConstants.BOARD_SIZE; i++) {
             for (int j = 0; j < GameConstants.BOARD_SIZE; j++) {
-                if (state.Board[i, j] == 0) continue;
+                if (state.Board[i, j] != 0) continue;
 
-                foreach (var dir in GameConstants.DIRECTIONS) {
-                    var line = BoardUtilities.GetLineAt(state, i, j, dir[0], dir[1]);
+                foreach (int[] dir in GameConstants.DIRECTIONS) {
+                    int[] line = BoardUtilities.GetLineAt(state, i, j, dir[0], dir[1]);
                     AnalyzeThreatPatterns(line, ref threats);
                 }
             }
@@ -250,7 +250,7 @@ public static class BoardEvaluator {
     /// <param name="col">Column</param>
     /// <returns>True if valid</returns>
     private static bool IsValidPosition(int row, int col) {
-        return row >= 0 && row < GameConstants.BOARD_SIZE && 
+        return row >= 0 && row < GameConstants.BOARD_SIZE &&
                col >= 0 && col < GameConstants.BOARD_SIZE;
     }
 
