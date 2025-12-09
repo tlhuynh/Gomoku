@@ -46,6 +46,9 @@ obj/
 .env.test
 .env.*.local
 
+# GitHub Copilot instructions (project-specific preferences)
+.github/copilot-instructions.md
+
 # Backup files
 *.backup
 *.bak
