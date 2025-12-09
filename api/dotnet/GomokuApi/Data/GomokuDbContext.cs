@@ -3,10 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace GomokuApi.Data;
 
-public class GomokuDbContext : DbContext {
-    public GomokuDbContext(DbContextOptions<GomokuDbContext> options) : base(options) {
-    }
-
+public class GomokuDbContext(DbContextOptions<GomokuDbContext> options) : DbContext(options) {
     public DbSet<UserModel> Users { get; set; }
 
     protected override void OnModelCreating(ModelBuilder builder) {
