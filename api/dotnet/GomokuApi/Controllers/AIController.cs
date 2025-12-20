@@ -1,5 +1,6 @@
 using GomokuApi.Mapping;
 using GomokuApi.Models;
+using GomokuApi.Models.Requests;
 using GomokuApi.Services;
 using Microsoft.AspNetCore.Mvc;
 

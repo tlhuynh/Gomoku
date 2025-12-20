@@ -1,4 +1,4 @@
-namespace GomokuApi.Models;
+namespace GomokuApi.Models.Requests;
 
 /// <summary>
 /// Represents the game state request from the frontend

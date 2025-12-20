@@ -1,4 +1,4 @@
-namespace GomokuApi.Models;
+namespace GomokuApi.Models.Responses;
 
 /// <summary>
 /// Represents the AI's response to a move request, including the chosen move and its evaluation score

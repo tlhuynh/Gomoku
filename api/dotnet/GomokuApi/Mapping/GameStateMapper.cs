@@ -1,4 +1,5 @@
 using GomokuApi.Models;
+using GomokuApi.Models.Requests;
 using GomokuApi.Utilities;
 
 namespace GomokuApi.Mapping;

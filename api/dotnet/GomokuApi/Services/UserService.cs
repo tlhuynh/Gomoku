@@ -1,5 +1,5 @@
 using GomokuApi.Data;
-using GomokuApi.Models.Database;
+using GomokuApi.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace GomokuApi.Services;

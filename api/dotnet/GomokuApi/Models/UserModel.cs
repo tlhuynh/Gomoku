@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace GomokuApi.Models.Database;
+namespace GomokuApi.Models;
 
 /// <summary>
 /// User entity

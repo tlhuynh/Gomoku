@@ -1,4 +1,4 @@
-using GomokuApi.Models.Database;
+using GomokuApi.Models;
 
 namespace GomokuApi.Services;
 
